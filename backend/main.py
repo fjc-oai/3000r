@@ -4,6 +4,7 @@ Create a session:
   -H 'content-type: application/json' \
   -d '{"date":"2025-09-02","dur_min":30}'
 
+
 List all sessions:
 > curl -s http://localhost:8000/sessions
 """
