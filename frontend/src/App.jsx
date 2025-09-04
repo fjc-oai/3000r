@@ -26,7 +26,7 @@ function App() {
     const res = await fetch(`${API}/sessions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, dur_min: Number(durMin) }),
+      body: JSON.stringify({ date, duration: Number(durMin) }),
     });
     if (res.ok) {
       setDurMin(30);
@@ -77,7 +77,7 @@ function App() {
         <ul>
           {sessions.map((s, i) => (
             <li key={i}>
-              <strong>{s.date}</strong> – {s.dur_min} min
+              <strong>{s.date}</strong> – {s.duration} min
             </li>
           ))}
         </ul>
