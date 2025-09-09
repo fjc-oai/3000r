@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 
-const API = "/api"; // FastAPI backend
+const API = import.meta.env.VITE_API_URL || "/api";
+
 
 function App() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
