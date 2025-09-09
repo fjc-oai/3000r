@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const API = "http://localhost:8000"; // FastAPI backend
+const API = "/api"; // FastAPI backend
 
 function App() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
