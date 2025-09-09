@@ -70,8 +70,23 @@ metadata = sa.MetaData()
 sessions = sa.Table(
     "sessions",
     metadata,
+    sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
     sa.Column("date", sa.Date, nullable=False),
     sa.Column("duration", sa.Integer, nullable=False),
+)
+words = sa.Table(
+    "words",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+    sa.Column("word", sa.String(255), nullable=False),
+    sa.Column("date", sa.Date, nullable=False),
+)
+word_examples = sa.Table(
+    "word_examples",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+    sa.Column("word_id", sa.Integer, sa.ForeignKey("words.id", ondelete="CASCADE"), nullable=False),
+    sa.Column("example", sa.Text, nullable=False),
 )
 metadata.create_all(engine)  # CREATE TABLE IF NOT EXISTS
 
@@ -98,6 +113,57 @@ def list_sessions():
             )
         ).all()
     return [{"date": r.date, "duration": r.duration} for r in rows]
+
+
+class WordCreate(BaseModel):
+    word: str = Field(min_length=1)
+    examples: List[str] = Field(min_items=1)
+
+
+class Word(BaseModel):
+    id: int
+    word: str
+    date: date
+    examples: List[str]
+
+
+@app.post("/api/words", response_model=Word)
+def add_word(w: WordCreate):
+    valid_examples = [e.strip() for e in w.examples if e and e.strip()]
+    server_date = date.today()
+    with engine.begin() as conn:
+        result = conn.execute(sa.insert(words).values(word=w.word, date=server_date))
+        inserted_pk = result.inserted_primary_key
+        if inserted_pk and len(inserted_pk) > 0:
+            new_id = inserted_pk[0]
+        else:
+            new_id = conn.execute(sa.select(sa.func.max(words.c.id))).scalar_one()
+        if valid_examples:
+            conn.execute(
+                sa.insert(word_examples),
+                [{"word_id": new_id, "example": ex} for ex in valid_examples],
+            )
+    return {"id": new_id, "word": w.word, "date": server_date, "examples": valid_examples}
+
+
+@app.get("/api/words", response_model=List[Word])
+def list_words():
+    with engine.begin() as conn:
+        word_rows = conn.execute(
+            sa.select(words.c.id, words.c.word, words.c.date).order_by(
+                words.c.date.desc(), words.c.id.desc()
+            )
+        ).all()
+        example_rows = conn.execute(
+            sa.select(word_examples.c.word_id, word_examples.c.example)
+        ).all()
+    examples_by_word_id = {}
+    for word_id, example in example_rows:
+        examples_by_word_id.setdefault(word_id, []).append(example)
+    return [
+        {"id": r.id, "word": r.word, "date": r.date, "examples": examples_by_word_id.get(r.id, [])}
+        for r in word_rows
+    ]
 
 
 @app.get("/api/healthz")
