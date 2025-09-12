@@ -147,13 +147,17 @@ def add_word(w: WordCreate):
 
 
 @app.get("/api/words", response_model=List[Word])
-def list_words():
+def list_words(start: date | None = None, end: date | None = None):
+    # Build base query with optional date range filtering
+    stmt = sa.select(words.c.id, words.c.word, words.c.date)
+    if start is not None:
+        stmt = stmt.where(words.c.date >= start)
+    if end is not None:
+        stmt = stmt.where(words.c.date <= end)
+    stmt = stmt.order_by(words.c.date.desc(), words.c.id.desc())
+
     with engine.begin() as conn:
-        word_rows = conn.execute(
-            sa.select(words.c.id, words.c.word, words.c.date).order_by(
-                words.c.date.desc(), words.c.id.desc()
-            )
-        ).all()
+        word_rows = conn.execute(stmt).all()
         example_rows = conn.execute(
             sa.select(word_examples.c.word_id, word_examples.c.example)
         ).all()

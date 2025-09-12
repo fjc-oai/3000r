@@ -17,6 +17,14 @@ function App() {
   const [examplesText, setExamplesText] = useState(""); // one example per line
   const [submittingWord, setSubmittingWord] = useState(false);
 
+  // word bank
+  const [wordBankWords, setWordBankWords] = useState([]);
+  const [wordBankLoading, setWordBankLoading] = useState(false);
+  const [wbFilterMode, setWbFilterMode] = useState("week"); // day | week | month | custom | all
+  const [wbCustomStart, setWbCustomStart] = useState(""); // YYYY-MM-DD
+  const [wbCustomEnd, setWbCustomEnd] = useState(""); // YYYY-MM-DD
+  const [hoveredWordId, setHoveredWordId] = useState(null);
+
   async function refreshSessions() {
     try {
       const res = await fetch(`${API}/sessions`);
@@ -132,10 +140,86 @@ function App() {
     }
   }
 
+  // --- Word Bank helpers ---
+  function todayIso() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function isoNDaysAgo(n) {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function currentRangeFromMode(mode) {
+    if (mode === "all") return { start: null, end: null };
+    if (mode === "day") {
+      const t = todayIso();
+      return { start: t, end: t };
+    }
+    if (mode === "week") {
+      // last 7 days including today
+      return { start: isoNDaysAgo(6), end: todayIso() };
+    }
+    if (mode === "month") {
+      // last 30 days including today
+      return { start: isoNDaysAgo(29), end: todayIso() };
+    }
+    if (mode === "custom") {
+      if (wbCustomStart && wbCustomEnd) return { start: wbCustomStart, end: wbCustomEnd };
+      return { start: null, end: null };
+    }
+    return { start: null, end: null };
+  }
+
+  async function refreshWordBank() {
+    const { start, end } = currentRangeFromMode(wbFilterMode);
+    let url = `${API}/words`;
+    const params = [];
+    if (start) params.push(`start=${encodeURIComponent(start)}`);
+    if (end) params.push(`end=${encodeURIComponent(end)}`);
+    if (params.length > 0) url += `?${params.join("&")}`;
+    setWordBankLoading(true);
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setWordBankWords(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setWordBankLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (page === "wordBank") {
+      if (wbFilterMode === "custom") {
+        if (wbCustomStart && wbCustomEnd) {
+          refreshWordBank();
+        }
+      } else {
+        refreshWordBank();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, wbFilterMode]);
+
+  useEffect(() => {
+    if (page === "wordBank" && wbFilterMode === "custom" && wbCustomStart && wbCustomEnd) {
+      refreshWordBank();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wbCustomStart, wbCustomEnd]);
+
   if (page === "home") {
     return (
       <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif" }}>
-        <button onClick={startSession} style={{ fontSize: 24, padding: "1rem 2rem", marginBottom: "1rem" }}>Start Session</button>
+        <div style={{ display: "flex", gap: 12, marginBottom: "1rem" }}>
+          <button onClick={startSession} style={{ fontSize: 24, padding: "1rem 2rem" }}>Start Session</button>
+          <button onClick={() => setPage("wordBank")} style={{ fontSize: 24, padding: "1rem 2rem" }}>Word Bank</button>
+        </div>
         <div style={{ width: "100%", maxWidth: 480, marginTop: 12 }}>
           <h3 style={{ textAlign: "center" }}>Recent Sessions</h3>
           {sessions.length === 0 ? (
@@ -145,6 +229,62 @@ function App() {
               {sessions.slice(0, 7).map((s, i) => (
                 <li key={i} style={{ marginBottom: 6, textAlign: "left" }}>
                   <strong>{s.date}</strong> – {s.duration} min
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (page === "wordBank") {
+    return (
+      <div style={{ minHeight: "100vh", padding: "1.5rem", fontFamily: "sans-serif", maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
+          <button onClick={() => setPage("home")} style={{ padding: "0.5rem 0.75rem" }}>Back</button>
+          <h2 style={{ margin: 0 }}>Word Bank</h2>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginBottom: 12 }}>
+          <label>
+            <select value={wbFilterMode} onChange={(e) => setWbFilterMode(e.target.value)} style={{ padding: 6 }}>
+              <option value="day">Past day</option>
+              <option value="week">Past week</option>
+              <option value="month">Past month</option>
+              <option value="custom">Custom range</option>
+              <option value="all">All</option>
+            </select>
+          </label>
+          {wbFilterMode === "custom" && (
+            <>
+              <input type="date" value={wbCustomStart} onChange={(e) => setWbCustomStart(e.target.value)} />
+              <span>to</span>
+              <input type="date" value={wbCustomEnd} onChange={(e) => setWbCustomEnd(e.target.value)} />
+            </>
+          )}
+        </div>
+        <div>
+          {wordBankLoading ? (
+            <p>Loading...</p>
+          ) : wordBankWords.length === 0 ? (
+            <p>No words.</p>
+          ) : (
+            <ul style={{ paddingLeft: 18 }}>
+              {wordBankWords.map((w) => (
+                <li
+                  key={w.id}
+                  onMouseEnter={() => setHoveredWordId(w.id)}
+                  onMouseLeave={() => setHoveredWordId(null)}
+                  style={{ marginBottom: 10 }}
+                >
+                  <strong>{w.word}</strong>
+                  {hoveredWordId === w.id && w.examples && w.examples.length > 0 && (
+                    <ul style={{ paddingLeft: 18, marginTop: 4 }}>
+                      {w.examples.map((ex, idx) => (
+                        <li key={idx} style={{ color: "#444" }}>{ex}</li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
             </ul>

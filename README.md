@@ -1,6 +1,36 @@
 # 3000r
 
-TODO 9.8
+## links
+- https://three000r-web.onrender.com
+- https://dashboard.render.com/web/srv-d2shk66mcj7s73a5raeg/deploys/dep-d31q4cemcj7s738v6rr0
+- https://console.neon.tech/app/projects/mute-mud-01593984/branches/br-winter-king-af7p2cux/sql-editor?database=neondb
+
+## cmds
+- `npm run build && rm -rf ../backend/frontend/dist && cp -r dist ../backend/frontend/`
+- `uvicorn app:app --reload --port 8000`
+
+# Features
+
+## TODO 09/11
+### word review
+so in the first page, besides start session button, i want to add a new button leading to word bank page.
+
+in word bank page, there are several ways to display/filter the words i have added
+
+it can show the words added in past a day, a week, a month, or a customized range. it also has an option to show all the words.
+
+for each word displayed, only show the word itself by default. when hover your mouse, it shows all the example sentences 
+### word test
+1. select words: time based, random, familarity
+2. test. 
+   1. mode 1: show words, click yes or no
+   2. mode 2: show examples, click yes or no, hint shows words
+3. familarity is defined as
+   1. (#yes) / (#yes + #no)
+   2. every new word by default is #yes=0, #no=1
+   3. each click bump either #yes or #no
+
+## TODO 9.8
 couple feedbacks.
 
 1. overall looks great. the word part works well
