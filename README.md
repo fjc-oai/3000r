@@ -1,9 +1,13 @@
 # 3000r
 
 ## links
+Render
 - https://three000r-web.onrender.com
 - https://dashboard.render.com/web/srv-d2shk66mcj7s73a5raeg/deploys/dep-d31q4cemcj7s738v6rr0
+Neon
 - https://console.neon.tech/app/projects/mute-mud-01593984/branches/br-winter-king-af7p2cux/sql-editor?database=neondb
+Uptime
+- https://dashboard.uptimerobot.com/monitors/801378548
 
 ## cmds
 - `npm run build && rm -rf ../backend/frontend/dist && cp -r dist ../backend/frontend/`
