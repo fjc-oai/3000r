@@ -11,6 +11,18 @@
 
 # Features
 
+## TODO 09/15 (DONE)
+1. on the home page, i need to new faeture: 
+so currently we can use start botton to start a session.
+but sometimes i have done learning separately. i only want to record a session, by typing the duration. or i want to record some new words directly.
+could you implement this as another option on 
+
+2. for recent sessions (showing on both home page and start session page), can we show aggregated session info, e.g. instead of showing every session, can you show the learning duration for past a week aggregated per day
+
+3. currently i'm using render to deploy this webpage. because i'm using a free plan, so the free instance will spin down with inactivity, which can delay requests by 50 seconds or more.
+
+can i somehow activity this webpage by itself (e.g. on backend somehow) every few minutes, to prevent it inactivity?
+
 ## TODO 09/11
 ### word review
 so in the first page, besides start session button, i want to add a new button leading to word bank page.
@@ -30,7 +42,7 @@ for each word displayed, only show the word itself by default. when hover your m
    2. every new word by default is #yes=0, #no=1
    3. each click bump either #yes or #no
 
-## TODO 9.8
+## TODO 9.8 (DONE)
 couple feedbacks.
 
 1. overall looks great. the word part works well

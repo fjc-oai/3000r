@@ -11,6 +11,7 @@ function App() {
   const [sessionEnded, setSessionEnded] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const [sessionWords, setSessionWords] = useState([]);
+  const [quickDurMin, setQuickDurMin] = useState(30);
 
   // word form
   const [word, setWord] = useState("");
@@ -105,6 +106,28 @@ function App() {
     }
   }
 
+  async function quickLogSession(e) {
+    e.preventDefault();
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const dur = Math.max(1, Number(quickDurMin));
+      const res = await fetch(`${API}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: today, duration: dur }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert("Failed to save session: " + JSON.stringify(err));
+        return;
+      }
+      setQuickDurMin(30);
+      await refreshSessions();
+    } catch (e) {
+      alert("Failed to save session: " + e.message);
+    }
+  }
+
   async function submitWord(e) {
     e.preventDefault();
     const examples = examplesText
@@ -149,6 +172,22 @@ function App() {
     const d = new Date();
     d.setDate(d.getDate() - n);
     return d.toISOString().slice(0, 10);
+  }
+
+  // Aggregate total minutes per day for the last N days (including today), newest first
+  function aggregateSessionsLastNDays(numDays) {
+    const totalsByDate = new Map();
+    for (const s of sessions) {
+      const key = s.date;
+      const dur = Number(s.duration) || 0;
+      totalsByDate.set(key, (totalsByDate.get(key) || 0) + dur);
+    }
+    const result = [];
+    for (let i = 0; i < numDays; i++) {
+      const day = isoNDaysAgo(i);
+      result.push({ date: day, minutes: totalsByDate.get(day) || 0 });
+    }
+    return result; // [today, yesterday, ...]
   }
 
   function currentRangeFromMode(mode) {
@@ -220,19 +259,55 @@ function App() {
           <button onClick={startSession} style={{ fontSize: 24, padding: "1rem 2rem" }}>Start Session</button>
           <button onClick={() => setPage("wordBank")} style={{ fontSize: 24, padding: "1rem 2rem" }}>Word Bank</button>
         </div>
+        <div style={{ width: "100%", maxWidth: 480, padding: 12, border: "1px solid #eee", borderRadius: 8, background: "#fafafa" }}>
+          <h3 style={{ marginTop: 0, marginBottom: 8 }}>Quick Add</h3>
+          <form onSubmit={quickLogSession} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+            <label>
+              Duration (min):{" "}
+              <input
+                type="number"
+                value={quickDurMin}
+                onChange={(e) => setQuickDurMin(e.target.value)}
+                min={1}
+                max={1440}
+                required
+                style={{ width: 100 }}
+              />
+            </label>
+            <button type="submit">Log</button>
+          </form>
+          <form onSubmit={submitWord}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <input
+                type="text"
+                value={word}
+                onChange={(e) => setWord(e.target.value)}
+                placeholder="Word"
+                required
+                style={{ flex: 1, padding: 8, fontSize: 16 }}
+              />
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <textarea
+                value={examplesText}
+                onChange={(e) => setExamplesText(e.target.value)}
+                placeholder={"Examples (one per line)"}
+                rows={3}
+                style={{ width: "100%", padding: 8, fontSize: 14 }}
+              />
+            </div>
+            <button type="submit" disabled={submittingWord}>Add Word</button>
+          </form>
+        </div>
         <div style={{ width: "100%", maxWidth: 480, marginTop: 12 }}>
-          <h3 style={{ textAlign: "center" }}>Recent Sessions</h3>
-          {sessions.length === 0 ? (
-            <p style={{ textAlign: "center", color: "#555" }}>No sessions yet.</p>
-          ) : (
-            <ul style={{ paddingLeft: 18 }}>
-              {sessions.slice(0, 7).map((s, i) => (
-                <li key={i} style={{ marginBottom: 6, textAlign: "left" }}>
-                  <strong>{s.date}</strong> – {s.duration} min
-                </li>
-              ))}
-            </ul>
-          )}
+          <h3 style={{ textAlign: "center" }}>Past Week (min/day)</h3>
+          <ul style={{ paddingLeft: 18 }}>
+            {aggregateSessionsLastNDays(7).map((d) => (
+              <li key={d.date} style={{ marginBottom: 6, textAlign: "left" }}>
+                <strong>{d.date}</strong> – {d.minutes} min
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     );
@@ -307,18 +382,14 @@ function App() {
             Elapsed: {formatDurationMs(elapsedMs)}
           </div>
         )}
-        <h3 style={{ marginTop: "1.5rem" }}>Recent Sessions</h3>
-        {sessions.length === 0 ? (
-          <p style={{ color: "#555" }}>No sessions yet.</p>
-        ) : (
-          <ul style={{ paddingLeft: 18 }}>
-            {sessions.slice(0, 7).map((s, i) => (
-              <li key={i} style={{ marginBottom: 6 }}>
-                <strong>{s.date}</strong> – {s.duration} min
-              </li>
-            ))}
-          </ul>
-        )}
+        <h3 style={{ marginTop: "1.5rem" }}>Past Week (min/day)</h3>
+        <ul style={{ paddingLeft: 18 }}>
+          {aggregateSessionsLastNDays(7).map((d) => (
+            <li key={d.date} style={{ marginBottom: 6 }}>
+              <strong>{d.date}</strong> – {d.minutes} min
+            </li>
+          ))}
+        </ul>
       </div>
       <div style={{ flex: 1, padding: "1.5rem" }}>
         {sessionEnded ? (
