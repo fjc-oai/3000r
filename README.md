@@ -17,6 +17,7 @@ Uptime
 
 ## TODO 09/19
 1. topic tracking
+2. end timer after words review
 
 ## TODO 09/15 (DONE)
 1. on the home page, i need to new faeture: 
