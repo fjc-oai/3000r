@@ -15,6 +15,9 @@ Uptime
 
 # Features
 
+## TODO 09/19
+1. topic tracking
+
 ## TODO 09/15 (DONE)
 1. on the home page, i need to new faeture: 
 so currently we can use start botton to start a session.
