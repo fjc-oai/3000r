@@ -1,4 +1,4 @@
 fastapi
 uvicorn
-SQLAlchemy>=2.0
+SQLAlchemy>=1.4.49,<2.0       # compatible with twnode and evallib-utils
 psycopg[binary]>=3.2 ; python_version >= "3.8"

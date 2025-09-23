@@ -3,6 +3,37 @@ import { useState, useEffect } from "react";
 const API = import.meta.env.VITE_API_URL || "/api";
 
 
+function AddTopicForm({ topicName, setTopicName, submitting, onSubmit }) {
+  return (
+    <form onSubmit={onSubmit} style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+      <input
+        type="text"
+        value={topicName}
+        onChange={(e) => setTopicName(e.target.value)}
+        placeholder="New topic"
+        required
+        style={{ flex: 1, padding: 8, fontSize: 16 }}
+      />
+      <button type="submit" disabled={submitting}>{submitting ? "Adding..." : "Add"}</button>
+    </form>
+  );
+}
+
+function TopicList({ topics, loading }) {
+  if (loading) return <p>Loading...</p>;
+  if (!topics || topics.length === 0) return <p>No topics.</p>;
+  return (
+    <ul style={{ paddingLeft: 18 }}>
+      {topics.map((t) => (
+        <li key={t.id} style={{ marginBottom: 6 }}>
+          <strong>{t.name}</strong>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+
 function App() {
   const [page, setPage] = useState("home");
   const [sessions, setSessions] = useState([]);
@@ -26,6 +57,12 @@ function App() {
   const [wbCustomEnd, setWbCustomEnd] = useState(""); // YYYY-MM-DD
   const [hoveredWordId, setHoveredWordId] = useState(null);
 
+  // topics
+  const [topics, setTopics] = useState([]);
+  const [topicName, setTopicName] = useState("");
+  const [submittingTopic, setSubmittingTopic] = useState(false);
+  const [topicsLoading, setTopicsLoading] = useState(false);
+
   async function refreshSessions() {
     try {
       const res = await fetch(`${API}/sessions`);
@@ -40,6 +77,10 @@ function App() {
 
   useEffect(() => {
     refreshSessions();
+  }, []);
+
+  useEffect(() => {
+    refreshTopics();
   }, []);
 
   // ticking clock while session is running
@@ -59,6 +100,49 @@ function App() {
       return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
     }
     return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  async function refreshTopics() {
+    setTopicsLoading(true);
+    try {
+      const res = await fetch(`${API}/topics`);
+      if (res.ok) {
+        const data = await res.json();
+        setTopics(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTopicsLoading(false);
+    }
+  }
+
+  async function submitTopic(e) {
+    e.preventDefault();
+    const name = (topicName || "").trim();
+    if (!name) {
+      alert("Please enter a topic.");
+      return;
+    }
+    setSubmittingTopic(true);
+    try {
+      const res = await fetch(`${API}/topics`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (res.ok) {
+        setTopicName("");
+        await refreshTopics();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert("Failed to add topic: " + JSON.stringify(err));
+      }
+    } catch (e) {
+      alert("Failed to add topic: " + e.message);
+    } finally {
+      setSubmittingTopic(false);
+    }
   }
 
   const elapsedMs = sessionStartMs ? ((sessionEndMs ?? nowMs) - sessionStartMs) : 0;
@@ -254,60 +338,74 @@ function App() {
 
   if (page === "home") {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif" }}>
-        <div style={{ display: "flex", gap: 12, marginBottom: "1rem" }}>
-          <button onClick={startSession} style={{ fontSize: 24, padding: "1rem 2rem" }}>Start Session</button>
-          <button onClick={() => setPage("wordBank")} style={{ fontSize: 24, padding: "1rem 2rem" }}>Word Bank</button>
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "row", alignItems: "flex-start", justifyContent: "center", gap: 16, fontFamily: "sans-serif", padding: "1rem" }}>
+        <div style={{ width: "100%", maxWidth: 480 }}>
+          <div style={{ display: "flex", gap: 12, marginBottom: "1rem" }}>
+            <button onClick={startSession} style={{ fontSize: 24, padding: "1rem 2rem" }}>Start Session</button>
+            <button onClick={() => setPage("wordBank")} style={{ fontSize: 24, padding: "1rem 2rem" }}>Word Bank</button>
+          </div>
+          <div style={{ width: "100%", padding: 12, border: "1px solid #eee", borderRadius: 8, background: "#fafafa" }}>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Quick Add</h3>
+            <form onSubmit={quickLogSession} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+              <label>
+                Duration (min):{" "}
+                <input
+                  type="number"
+                  value={quickDurMin}
+                  onChange={(e) => setQuickDurMin(e.target.value)}
+                  min={1}
+                  max={1440}
+                  required
+                  style={{ width: 100 }}
+                />
+              </label>
+              <button type="submit">Log</button>
+            </form>
+            <form onSubmit={submitWord}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <input
+                  type="text"
+                  value={word}
+                  onChange={(e) => setWord(e.target.value)}
+                  placeholder="Word"
+                  required
+                  style={{ flex: 1, padding: 8, fontSize: 16 }}
+                />
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <textarea
+                  value={examplesText}
+                  onChange={(e) => setExamplesText(e.target.value)}
+                  placeholder={"Examples (one per line)"}
+                  rows={3}
+                  style={{ width: "100%", padding: 8, fontSize: 14 }}
+                />
+              </div>
+              <button type="submit" disabled={submittingWord}>Add Word</button>
+            </form>
+          </div>
+          <div style={{ width: "100%", marginTop: 12 }}>
+            <h3 style={{ textAlign: "center" }}>Past Week (min/day)</h3>
+            <ul style={{ paddingLeft: 18 }}>
+              {aggregateSessionsLastNDays(7).map((d) => (
+                <li key={d.date} style={{ marginBottom: 6, textAlign: "left" }}>
+                  <strong>{d.date}</strong> – {d.minutes} min
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
-        <div style={{ width: "100%", maxWidth: 480, padding: 12, border: "1px solid #eee", borderRadius: 8, background: "#fafafa" }}>
-          <h3 style={{ marginTop: 0, marginBottom: 8 }}>Quick Add</h3>
-          <form onSubmit={quickLogSession} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
-            <label>
-              Duration (min):{" "}
-              <input
-                type="number"
-                value={quickDurMin}
-                onChange={(e) => setQuickDurMin(e.target.value)}
-                min={1}
-                max={1440}
-                required
-                style={{ width: 100 }}
-              />
-            </label>
-            <button type="submit">Log</button>
-          </form>
-          <form onSubmit={submitWord}>
-            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-              <input
-                type="text"
-                value={word}
-                onChange={(e) => setWord(e.target.value)}
-                placeholder="Word"
-                required
-                style={{ flex: 1, padding: 8, fontSize: 16 }}
-              />
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <textarea
-                value={examplesText}
-                onChange={(e) => setExamplesText(e.target.value)}
-                placeholder={"Examples (one per line)"}
-                rows={3}
-                style={{ width: "100%", padding: 8, fontSize: 14 }}
-              />
-            </div>
-            <button type="submit" disabled={submittingWord}>Add Word</button>
-          </form>
-        </div>
-        <div style={{ width: "100%", maxWidth: 480, marginTop: 12 }}>
-          <h3 style={{ textAlign: "center" }}>Past Week (min/day)</h3>
-          <ul style={{ paddingLeft: 18 }}>
-            {aggregateSessionsLastNDays(7).map((d) => (
-              <li key={d.date} style={{ marginBottom: 6, textAlign: "left" }}>
-                <strong>{d.date}</strong> – {d.minutes} min
-              </li>
-            ))}
-          </ul>
+
+        <div style={{ width: 360, padding: 12, border: "1px solid #eee", borderRadius: 8, background: "#fafafa" }}>
+          <h3 style={{ marginTop: 0, marginBottom: 8 }}>Add Topic</h3>
+          <AddTopicForm
+            topicName={topicName}
+            setTopicName={setTopicName}
+            submitting={submittingTopic}
+            onSubmit={submitTopic}
+          />
+          <h3 style={{ marginTop: 16, marginBottom: 8 }}>Topics</h3>
+          <TopicList topics={topics} loading={topicsLoading} />
         </div>
       </div>
     );

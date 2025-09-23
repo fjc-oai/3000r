@@ -88,6 +88,13 @@ word_examples = sa.Table(
     sa.Column("word_id", sa.Integer, sa.ForeignKey("words.id", ondelete="CASCADE"), nullable=False),
     sa.Column("example", sa.Text, nullable=False),
 )
+# Topics
+topics = sa.Table(
+    "topics",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+    sa.Column("name", sa.String(255), nullable=False),
+)
 metadata.create_all(engine)  # CREATE TABLE IF NOT EXISTS
 
 
@@ -168,6 +175,36 @@ def list_words(start: date | None = None, end: date | None = None):
         {"id": r.id, "word": r.word, "date": r.date, "examples": examples_by_word_id.get(r.id, [])}
         for r in word_rows
     ]
+
+
+class TopicCreate(BaseModel):
+    name: str = Field(min_length=1)
+
+
+class Topic(BaseModel):
+    id: int
+    name: str
+
+
+@app.post("/api/topics", response_model=Topic)
+def add_topic(t: TopicCreate):
+    with engine.begin() as conn:
+        result = conn.execute(sa.insert(topics).values(name=t.name))
+        inserted_pk = result.inserted_primary_key
+        if inserted_pk and len(inserted_pk) > 0:
+            new_id = inserted_pk[0]
+        else:
+            new_id = conn.execute(sa.select(sa.func.max(topics.c.id))).scalar_one()
+    return {"id": new_id, "name": t.name}
+
+
+@app.get("/api/topics", response_model=List[Topic])
+def list_topics():
+    with engine.begin() as conn:
+        rows = conn.execute(
+            sa.select(topics.c.id, topics.c.name).order_by(topics.c.id.desc())
+        ).all()
+    return [{"id": r.id, "name": r.name} for r in rows]
 
 
 @app.get("/api/healthz")
