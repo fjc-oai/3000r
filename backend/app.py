@@ -2,7 +2,7 @@
 import os
 import pathlib
 from datetime import date, datetime
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 import sqlalchemy as sa
 from fastapi import FastAPI
@@ -125,6 +125,7 @@ def list_sessions():
 class WordCreate(BaseModel):
     word: str = Field(min_length=1)
     examples: List[str] = Field(min_items=1)
+    date: Optional[date] = None
 
 
 class Word(BaseModel):
@@ -137,9 +138,9 @@ class Word(BaseModel):
 @app.post("/api/words", response_model=Word)
 def add_word(w: WordCreate):
     valid_examples = [e.strip() for e in w.examples if e and e.strip()]
-    server_date = date.today()
+    chosen_date = w.date or date.today()
     with engine.begin() as conn:
-        result = conn.execute(sa.insert(words).values(word=w.word, date=server_date))
+        result = conn.execute(sa.insert(words).values(word=w.word, date=chosen_date))
         inserted_pk = result.inserted_primary_key
         if inserted_pk and len(inserted_pk) > 0:
             new_id = inserted_pk[0]
@@ -150,11 +151,11 @@ def add_word(w: WordCreate):
                 sa.insert(word_examples),
                 [{"word_id": new_id, "example": ex} for ex in valid_examples],
             )
-    return {"id": new_id, "word": w.word, "date": server_date, "examples": valid_examples}
+    return {"id": new_id, "word": w.word, "date": chosen_date, "examples": valid_examples}
 
 
 @app.get("/api/words", response_model=List[Word])
-def list_words(start: date | None = None, end: date | None = None):
+def list_words(start: Optional[date] = None, end: Optional[date] = None):
     # Build base query with optional date range filtering
     stmt = sa.select(words.c.id, words.c.word, words.c.date)
     if start is not None:

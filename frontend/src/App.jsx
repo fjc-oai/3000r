@@ -169,7 +169,7 @@ function App() {
       return;
     }
     const elapsedMin = Math.max(1, Math.round((Date.now() - sessionStartMs) / 60000));
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localYmd();
     try {
       const res = await fetch(`${API}/sessions`, {
         method: "POST",
@@ -192,7 +192,7 @@ function App() {
 
   async function quickLogSession(e) {
     e.preventDefault();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localYmd();
     try {
       const dur = Math.max(1, Number(quickDurMin));
       const res = await fetch(`${API}/sessions`, {
@@ -227,7 +227,7 @@ function App() {
       const res = await fetch(`${API}/words`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ word: word.trim(), examples }),
+        body: JSON.stringify({ word: word.trim(), examples, date: localYmd() }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -248,14 +248,21 @@ function App() {
   }
 
   // --- Word Bank helpers ---
+  function localYmd(d = new Date()) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
   function todayIso() {
-    return new Date().toISOString().slice(0, 10);
+    return localYmd();
   }
 
   function isoNDaysAgo(n) {
     const d = new Date();
     d.setDate(d.getDate() - n);
-    return d.toISOString().slice(0, 10);
+    return localYmd(d);
   }
 
   // Aggregate total minutes per day for the last N days (including today), newest first

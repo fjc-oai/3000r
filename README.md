@@ -25,7 +25,7 @@ pip install -r requirements.txt
 ## 09/22
 - [x] topic feature
 - [ ] periodically backup db in case Neon is down or misconduct on the db
-- [ ] fix timezone issue
+- [x] fix timezone issue
 - [ ] end timer after words review
 
 ## TODO 09/15 (DONE)
