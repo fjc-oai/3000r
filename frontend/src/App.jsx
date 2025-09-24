@@ -227,7 +227,7 @@ function App() {
       const res = await fetch(`${API}/words`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ word: word.trim(), examples, date: localYmd() }),
+        body: JSON.stringify({ word: word.trim(), examples }),
       });
       if (res.ok) {
         const data = await res.json();
