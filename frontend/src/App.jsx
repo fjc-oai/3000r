@@ -43,6 +43,7 @@ function App() {
   const [nowMs, setNowMs] = useState(Date.now());
   const [sessionWords, setSessionWords] = useState([]);
   const [quickDurMin, setQuickDurMin] = useState(30);
+  const [reviewing, setReviewing] = useState(false);
 
   // word form
   const [word, setWord] = useState("");
@@ -152,6 +153,7 @@ function App() {
     setSessionEndMs(null);
     setSessionEnded(false);
     setSessionWords([]);
+    setReviewing(false);
     setPage("session");
   }
 
@@ -161,9 +163,19 @@ function App() {
     setSessionEndMs(null);
     setSessionEnded(false);
     setSessionWords([]);
+    setReviewing(false);
   }
 
-  async function endSession() {
+  function endSession() {
+    if (!sessionStartMs) {
+      goHome();
+      return;
+    }
+    // Enter review mode; keep timer running until review is finished
+    setReviewing(true);
+  }
+
+  async function saveSessionAfterReview() {
     if (!sessionStartMs) {
       goHome();
       return;
@@ -185,8 +197,8 @@ function App() {
     } finally {
       setSessionEndMs(Date.now());
       setSessionEnded(true);
+      setReviewing(false);
       await refreshSessions();
-      // stay on session page and show summary on the right
     }
   }
 
@@ -233,7 +245,7 @@ function App() {
         const data = await res.json();
         setWord("");
         setExamplesText("");
-        if (page === "session" && !sessionEnded && data && data.id) {
+        if (page === "session" && !sessionEnded && !reviewing && data && data.id) {
           setSessionWords((prev) => [{ id: data.id, word: data.word, date: data.date, examples: data.examples }, ...prev]);
         }
       } else {
@@ -477,7 +489,13 @@ function App() {
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "row", fontFamily: "sans-serif" }}>
       <div style={{ width: 320, borderRight: "1px solid #eee", padding: "1rem" }}>
-        <button onClick={endSession} disabled={sessionEnded} style={{ width: "100%,", padding: "0.75rem", fontSize: 18, marginBottom: "1rem" }}>{sessionEnded ? "Session Ended" : "End Session"}</button>
+        {sessionEnded ? (
+          <button disabled style={{ width: "100%,", padding: "0.75rem", fontSize: 18, marginBottom: "1rem" }}>Session Ended</button>
+        ) : reviewing ? (
+          <button onClick={saveSessionAfterReview} style={{ width: "100%,", padding: "0.75rem", fontSize: 18, marginBottom: "1rem" }}>Finish Review & Save</button>
+        ) : (
+          <button onClick={endSession} style={{ width: "100%,", padding: "0.75rem", fontSize: 18, marginBottom: "1rem" }}>End Session</button>
+        )}
         <button onClick={goHome} style={{ width: "100%", padding: "0.5rem", marginBottom: "1rem" }}>Back</button>
         <div style={{ color: "#666", fontSize: 14, marginBottom: 8 }}>
           Session started: {sessionStartMs ? new Date(sessionStartMs).toLocaleTimeString() : "-"}
@@ -497,9 +515,9 @@ function App() {
         </ul>
       </div>
       <div style={{ flex: 1, padding: "1.5rem" }}>
-        {sessionEnded ? (
+        {(reviewing || sessionEnded) ? (
           <div>
-            <h2 style={{ marginTop: 0 }}>Session Summary</h2>
+            <h2 style={{ marginTop: 0 }}>{reviewing && !sessionEnded ? "Review Words" : "Session Summary"}</h2>
             {sessionWords.length === 0 ? (
               <p>No words added this session.</p>
             ) : (

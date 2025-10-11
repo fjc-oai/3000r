@@ -26,7 +26,7 @@ pip install -r requirements.txt
 - [x] topic feature
 - [ ] periodically backup db in case Neon is down or misconduct on the db
 - [x] fix timezone issue
-- [ ] end timer after words review
+- [x] end timer after words review
 
 ## TODO 09/15 (DONE)
 - [x] on the home page, i need to new faeture: 
