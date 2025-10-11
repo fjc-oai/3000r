@@ -22,6 +22,9 @@ pip install -r requirements.txt
 
 # Features
 
+## 10/11
+- [x] bash script to automate cmds
+
 ## 09/22
 - [x] topic feature
 - [ ] periodically backup db in case Neon is down or misconduct on the db
