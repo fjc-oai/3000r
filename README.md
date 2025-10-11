@@ -22,8 +22,10 @@ pip install -r requirements.txt
 
 # Features
 
-## 10/11
+## 10/11 
 - [x] bash script to automate cmds
+- [ ] word review - alpha 
+- [ ] learning stats: to be discussed about the details
 
 ## 09/22
 - [x] topic feature

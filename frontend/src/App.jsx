@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import Review from "./Review";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
@@ -66,11 +67,13 @@ function App() {
 
   async function refreshSessions() {
     try {
-      const res = await fetch(`${API}/sessions`);
-      if (res.ok) {
-        const data = await res.json();
-        setSessions(data);
-      }
+      const [resA, resB] = await Promise.all([
+        fetch(`${API}/sessions`),
+        fetch(`${API}/review_sessions`),
+      ]);
+      const dataA = resA.ok ? await resA.json() : [];
+      const dataB = resB.ok ? await resB.json() : [];
+      setSessions([...(Array.isArray(dataA) ? dataA : []), ...(Array.isArray(dataB) ? dataB : [])]);
     } catch (e) {
       console.error(e);
     }
@@ -362,6 +365,7 @@ function App() {
           <div style={{ display: "flex", gap: 12, marginBottom: "1rem" }}>
             <button onClick={startSession} style={{ fontSize: 24, padding: "1rem 2rem" }}>Start Session</button>
             <button onClick={() => setPage("wordBank")} style={{ fontSize: 24, padding: "1rem 2rem" }}>Word Bank</button>
+            <button onClick={() => setPage("review")} style={{ fontSize: 24, padding: "1rem 2rem" }}>Review Words</button>
           </div>
           <div style={{ width: "100%", padding: 12, border: "1px solid #eee", borderRadius: 8, background: "#fafafa" }}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>Quick Add</h3>
@@ -428,6 +432,10 @@ function App() {
         </div>
       </div>
     );
+  }
+
+  if (page === "review") {
+    return <Review onBack={() => setPage("home")} />;
   }
 
   if (page === "wordBank") {

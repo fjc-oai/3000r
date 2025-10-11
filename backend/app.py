@@ -74,6 +74,13 @@ sessions = sa.Table(
     sa.Column("date", sa.Date, nullable=False),
     sa.Column("duration", sa.Integer, nullable=False),
 )
+review_sessions = sa.Table(
+    "review_sessions",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+    sa.Column("date", sa.Date, nullable=False),
+    sa.Column("duration", sa.Integer, nullable=False),
+)
 words = sa.Table(
     "words",
     metadata,
@@ -117,6 +124,30 @@ def list_sessions():
         rows = conn.execute(
             sa.select(sessions.c.date, sessions.c.duration).order_by(
                 sessions.c.date.desc()
+            )
+        ).all()
+    return [{"date": r.date, "duration": r.duration} for r in rows]
+
+
+class ReviewSession(BaseModel):
+    date: date
+    duration: int = Field(gt=0, le=1440)
+
+
+@app.post("/api/review_sessions", response_model=ReviewSession)
+def add_review_session(s: ReviewSession):
+    print(f"Adding review session: {s}")
+    with engine.begin() as conn:
+        conn.execute(sa.insert(review_sessions).values(date=s.date, duration=s.duration))
+    return s
+
+
+@app.get("/api/review_sessions", response_model=List[ReviewSession])
+def list_review_sessions():
+    with engine.begin() as conn:
+        rows = conn.execute(
+            sa.select(review_sessions.c.date, review_sessions.c.duration).order_by(
+                review_sessions.c.date.desc()
             )
         ).all()
     return [{"date": r.date, "duration": r.duration} for r in rows]
