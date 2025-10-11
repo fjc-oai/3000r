@@ -8,6 +8,7 @@ export default function Review({ onBack }) {
   const [order, setOrder] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showHint, setShowHint] = useState(false);
+  const [mode, setMode] = useState("random_all"); // random_all | reverse_chrono | yesterday | last_week | last_month
 
   const [reviewStartMs, setReviewStartMs] = useState(null);
   const [reviewEndMs, setReviewEndMs] = useState(null);
@@ -43,6 +44,16 @@ export default function Review({ onBack }) {
     return `${y}-${m}-${day}`;
   }
 
+  function todayIso() {
+    return localYmd();
+  }
+
+  function isoNDaysAgo(n) {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return localYmd(d);
+  }
+
   function shuffleIndexes(n) {
     const arr = Array.from({ length: n }, (_, i) => i);
     for (let i = n - 1; i > 0; i--) {
@@ -52,14 +63,38 @@ export default function Review({ onBack }) {
     return arr;
   }
 
-  async function fetchAllWords() {
+  function shouldShuffle(m) {
+    return m === "random_all" || m === "yesterday" || m === "last_week" || m === "last_month";
+  }
+
+  async function fetchWordsForMode(m) {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/words`);
+      let url = `${API}/words`;
+      const params = [];
+      if (m === "yesterday") {
+        const y = isoNDaysAgo(1);
+        params.push(`start=${encodeURIComponent(y)}`);
+        params.push(`end=${encodeURIComponent(y)}`);
+      } else if (m === "last_week") {
+        params.push(`start=${encodeURIComponent(isoNDaysAgo(6))}`);
+        params.push(`end=${encodeURIComponent(todayIso())}`);
+      } else if (m === "last_month") {
+        params.push(`start=${encodeURIComponent(isoNDaysAgo(29))}`);
+        params.push(`end=${encodeURIComponent(todayIso())}`);
+      }
+      if (params.length > 0) url += `?${params.join("&")}`;
+
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setWords(data);
-        setOrder(shuffleIndexes(data.length));
+        if (shouldShuffle(m)) {
+          setOrder(shuffleIndexes(data.length));
+        } else {
+          // reverse_chrono uses API's default order (newest first)
+          setOrder(Array.from({ length: data.length }, (_, i) => i));
+        }
         setCurrentIndex(0);
       }
     } catch (e) {
@@ -70,9 +105,9 @@ export default function Review({ onBack }) {
   }
 
   useEffect(() => {
-    fetchAllWords();
+    fetchWordsForMode(mode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [mode]);
 
   const elapsedMs = reviewStartMs ? ((reviewEndMs ?? nowMs) - reviewStartMs) : 0;
 
@@ -86,9 +121,14 @@ export default function Review({ onBack }) {
     if (!order || order.length === 0) return;
     const next = currentIndex + 1;
     if (next >= order.length) {
-      // Re-shuffle for continuous review
-      setOrder(shuffleIndexes(words.length));
-      setCurrentIndex(0);
+      if (shouldShuffle(mode)) {
+        // Re-shuffle for continuous review on random modes
+        setOrder(shuffleIndexes(words.length));
+        setCurrentIndex(0);
+      } else {
+        // Loop back to newest
+        setCurrentIndex(0);
+      }
     } else {
       setCurrentIndex(next);
     }
@@ -136,6 +176,17 @@ export default function Review({ onBack }) {
       </div>
       <div style={{ flex: 1, padding: "1.5rem" }}>
         <h2 style={{ marginTop: 0 }}>Word Review</h2>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
+          <label>
+            <select value={mode} onChange={(e) => setMode(e.target.value)} style={{ padding: 6 }}>
+              <option value="random_all">Random</option>
+              <option value="reverse_chrono">Reverse chronological</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="last_week">Last week</option>
+              <option value="last_month">Last month</option>
+            </select>
+          </label>
+        </div>
         {loading ? (
           <p>Loading...</p>
         ) : !currentWord ? (

@@ -24,7 +24,10 @@ pip install -r requirements.txt
 
 ## 10/11 
 - [x] bash script to automate cmds
-- [ ] word review - alpha 
+- [x] word review - alpha 
+   - [ ] review mode, e.g. random, past week, reverse chronological, etc
+   - [ ] record word familarity
+   - [ ] add one more review mode, basedc on familarity
 - [ ] learning stats: to be discussed about the details
 
 ## 09/22
