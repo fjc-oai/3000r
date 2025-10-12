@@ -11,6 +11,7 @@ export default function Review({ onBack }) {
   const [mode, setMode] = useState("random_all"); // random_all | reverse_chrono | yesterday | last_week | last_month
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth <= 768 : false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [exhausted, setExhausted] = useState(false);
 
   const [reviewStartMs, setReviewStartMs] = useState(null);
   const [reviewEndMs, setReviewEndMs] = useState(null);
@@ -100,12 +101,15 @@ export default function Review({ onBack }) {
         const data = await res.json();
         setWords(data);
         if (shouldShuffle(m)) {
-          setOrder(shuffleIndexes(data.length));
+          const weights = data.map((w) => computeFamiliarity(w));
+          const ord = weightedOrder(data.length, weights);
+          setOrder(ord);
         } else {
           // reverse_chrono uses API's default order (newest first)
           setOrder(Array.from({ length: data.length }, (_, i) => i));
         }
         setCurrentIndex(0);
+        setExhausted(false);
       }
     } catch (e) {
       console.error(e);
@@ -127,22 +131,74 @@ export default function Review({ onBack }) {
     return words[idx] || null;
   }, [order, currentIndex, words]);
 
+  function computeFamiliarity(w) {
+    const yes = Number(w?.yes_count ?? 0);
+    const no = Number(w?.no_count ?? 1);
+    const denom = yes + no;
+    return denom > 0 ? yes / denom : 0;
+  }
+
+  function weightedOrder(n, weights) {
+    const idxs = Array.from({ length: n }, (_, i) => i);
+    const w = weights.slice();
+    const total = w.reduce((a, b) => a + (isFinite(b) ? b : 0), 0);
+    if (!isFinite(total) || total <= 0) {
+      return shuffleIndexes(n);
+    }
+    const result = [];
+    while (idxs.length > 0) {
+      let sum = 0;
+      for (let k = 0; k < w.length; k++) sum += w[k] || 0;
+      if (sum <= 0) {
+        // fallback to any remaining order
+        for (let k = 0; k < idxs.length; k++) result.push(idxs[k]);
+        break;
+      }
+      let r = Math.random() * sum;
+      let pick = 0;
+      for (let k = 0; k < idxs.length; k++) {
+        r -= w[idxs[k]] || 0;
+        if (r <= 0) { pick = k; break; }
+      }
+      const chosenIdx = idxs.splice(pick, 1)[0];
+      result.push(chosenIdx);
+      w[chosenIdx] = 0;
+    }
+    return result;
+  }
+
   function nextWord() {
     if (!order || order.length === 0) return;
     const next = currentIndex + 1;
     if (next >= order.length) {
-      if (shouldShuffle(mode)) {
-        // Re-shuffle for continuous review on random modes
-        setOrder(shuffleIndexes(words.length));
-        setCurrentIndex(0);
-      } else {
-        // Loop back to newest
-        setCurrentIndex(0);
-      }
+      // Do not repeat within one review session
+      setExhausted(true);
     } else {
       setCurrentIndex(next);
     }
     setShowHint(false);
+  }
+
+  async function submitOutcome(outcome) {
+    const w = currentWord;
+    if (!w) return;
+    try {
+      const res = await fetch(`${API}/word_stats/${w.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outcome }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // update local counts
+        setWords((prev) => prev.map((it) => (it.id === w.id ? { ...it, yes_count: data.yes_count, no_count: data.no_count } : it)));
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error(e);
+    } finally {
+      nextWord();
+    }
   }
 
   async function endReview() {
@@ -219,6 +275,10 @@ export default function Review({ onBack }) {
         </div>
         {loading ? (
           <p>Loading...</p>
+        ) : exhausted ? (
+          <div>
+            <p>All done for this review set. Change mode or end the session.</p>
+          </div>
         ) : !currentWord ? (
           <p>No words available.</p>
         ) : (
@@ -233,9 +293,10 @@ export default function Review({ onBack }) {
                 ))}
               </ul>
             )}
-            <div style={{ display: "flex", gap: 12, justifyContent: isMobile ? "center" : "flex-start" }}>
-              <button onClick={() => setShowHint(true)} disabled={reviewEnded} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>Hint</button>
-              <button onClick={nextWord} disabled={reviewEnded} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>Next</button>
+            <div style={{ display: "flex", gap: 12, justifyContent: isMobile ? "center" : "flex-start", flexWrap: "wrap" }}>
+              <button onClick={() => setShowHint(true)} disabled={reviewEnded || exhausted} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>Hint</button>
+              <button onClick={() => submitOutcome("yes")} disabled={reviewEnded || exhausted} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>Yes</button>
+              <button onClick={() => submitOutcome("no")} disabled={reviewEnded || exhausted} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>No</button>
             </div>
           </div>
         )}

@@ -88,6 +88,13 @@ words = sa.Table(
     sa.Column("word", sa.String(255), nullable=False),
     sa.Column("date", sa.Date, nullable=False),
 )
+word_stats = sa.Table(
+    "word_stats",
+    metadata,
+    sa.Column("word_id", sa.Integer, sa.ForeignKey("words.id", ondelete="CASCADE"), primary_key=True),
+    sa.Column("yes_count", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("no_count", sa.Integer, nullable=False, server_default="1"),
+)
 word_examples = sa.Table(
     "word_examples",
     metadata,
@@ -164,6 +171,8 @@ class Word(BaseModel):
     word: str
     date: date
     examples: List[str]
+    yes_count: int = 0
+    no_count: int = 1
 
 
 @app.post("/api/words", response_model=Word)
@@ -182,7 +191,11 @@ def add_word(w: WordCreate):
                 sa.insert(word_examples),
                 [{"word_id": new_id, "example": ex} for ex in valid_examples],
             )
-    return {"id": new_id, "word": w.word, "date": chosen_date, "examples": valid_examples}
+        # initialize stats: yes=0, no=1 for new words
+        conn.execute(
+            sa.insert(word_stats).values(word_id=new_id, yes_count=0, no_count=1)
+        )
+    return {"id": new_id, "word": w.word, "date": chosen_date, "examples": valid_examples, "yes_count": 0, "no_count": 1}
 
 
 @app.get("/api/words", response_model=List[Word])
@@ -200,13 +213,63 @@ def list_words(start: Optional[date] = None, end: Optional[date] = None):
         example_rows = conn.execute(
             sa.select(word_examples.c.word_id, word_examples.c.example)
         ).all()
+        stats_rows = conn.execute(
+            sa.select(word_stats.c.word_id, word_stats.c.yes_count, word_stats.c.no_count)
+        ).all()
     examples_by_word_id = {}
     for word_id, example in example_rows:
         examples_by_word_id.setdefault(word_id, []).append(example)
+    stats_by_word_id = {wid: (yes, no) for (wid, yes, no) in stats_rows}
     return [
-        {"id": r.id, "word": r.word, "date": r.date, "examples": examples_by_word_id.get(r.id, [])}
+        {
+            "id": r.id,
+            "word": r.word,
+            "date": r.date,
+            "examples": examples_by_word_id.get(r.id, []),
+            "yes_count": (stats_by_word_id.get(r.id, (0, 1))[0]),
+            "no_count": (stats_by_word_id.get(r.id, (0, 1))[1]),
+        }
         for r in word_rows
     ]
+
+
+class WordReviewUpdate(BaseModel):
+    outcome: Literal["yes", "no"]
+
+
+class WordStats(BaseModel):
+    word_id: int
+    yes_count: int
+    no_count: int
+
+
+@app.post("/api/word_stats/{word_id}", response_model=WordStats)
+def update_word_stats(word_id: int, upd: WordReviewUpdate):
+    with engine.begin() as conn:
+        # ensure row exists
+        exists = conn.execute(
+            sa.select(word_stats.c.word_id).where(word_stats.c.word_id == word_id)
+        ).first()
+        if exists is None:
+            conn.execute(sa.insert(word_stats).values(word_id=word_id, yes_count=0, no_count=1))
+        if upd.outcome == "yes":
+            conn.execute(
+                sa.update(word_stats)
+                .where(word_stats.c.word_id == word_id)
+                .values(yes_count=word_stats.c.yes_count + 1)
+            )
+        else:
+            conn.execute(
+                sa.update(word_stats)
+                .where(word_stats.c.word_id == word_id)
+                .values(no_count=word_stats.c.no_count + 1)
+            )
+        row = conn.execute(
+            sa.select(word_stats.c.yes_count, word_stats.c.no_count).where(
+                word_stats.c.word_id == word_id
+            )
+        ).one()
+    return {"word_id": word_id, "yes_count": row.yes_count, "no_count": row.no_count}
 
 
 class TopicCreate(BaseModel):
