@@ -10,6 +10,7 @@ export default function Review({ onBack }) {
   const [showHint, setShowHint] = useState(false);
   const [mode, setMode] = useState("random_all"); // random_all | reverse_chrono | yesterday | last_week | last_month
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth <= 768 : false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [reviewStartMs, setReviewStartMs] = useState(null);
   const [reviewEndMs, setReviewEndMs] = useState(null);
@@ -177,7 +178,8 @@ export default function Review({ onBack }) {
 
   return (
     <div style={containerStyle}>
-      <div style={sidebarStyle}>
+      {sidebarOpen && (
+        <div style={sidebarStyle}>
         {isMobile ? (
           <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", marginBottom: 6 }}>
             <button onClick={endReview} disabled={reviewEnded} style={primaryBtnStyle}>{reviewEnded ? "Session Ended" : "End Session"}</button>
@@ -197,10 +199,11 @@ export default function Review({ onBack }) {
             Elapsed: {formatDurationMs(elapsedMs)}
           </div>
         )}
-      </div>
+        </div>
+      )}
       <div style={contentStyle}>
         <h2 style={{ marginTop: 0 }}>Word Review</h2>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
           <label>
             <select value={mode} onChange={(e) => setMode(e.target.value)} style={{ padding: 6 }}>
               <option value="random_all">Random</option>
@@ -210,6 +213,9 @@ export default function Review({ onBack }) {
               <option value="last_month">Last month</option>
             </select>
           </label>
+          <button onClick={() => setSidebarOpen((v) => !v)} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>
+            {sidebarOpen ? "Hide Panel" : "Show Panel"}
+          </button>
         </div>
         {loading ? (
           <p>Loading...</p>
