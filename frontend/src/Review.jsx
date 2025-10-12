@@ -9,6 +9,7 @@ export default function Review({ onBack }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showHint, setShowHint] = useState(false);
   const [mode, setMode] = useState("random_all"); // random_all | reverse_chrono | yesterday | last_week | last_month
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" ? window.innerWidth <= 768 : false);
 
   const [reviewStartMs, setReviewStartMs] = useState(null);
   const [reviewEndMs, setReviewEndMs] = useState(null);
@@ -17,6 +18,14 @@ export default function Review({ onBack }) {
 
   useEffect(() => {
     setReviewStartMs(Date.now());
+  }, []);
+
+  useEffect(() => {
+    function onResize() {
+      setIsMobile(window.innerWidth <= 768);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   useEffect(() => {
@@ -160,21 +169,36 @@ export default function Review({ onBack }) {
     }
   }
 
+  const containerStyle = { minHeight: "100vh", display: "flex", flexDirection: isMobile ? "column" : "row", fontFamily: "sans-serif" };
+  const sidebarStyle = { width: isMobile ? "100%" : 320, borderRight: isMobile ? "none" : "1px solid #eee", borderBottom: isMobile ? "1px solid #eee" : "none", padding: isMobile ? "0.75rem 1rem" : "1rem", position: isMobile ? "sticky" : "static", top: 0, background: isMobile ? "#fff" : undefined, zIndex: 1 };
+  const contentStyle = { flex: 1, padding: isMobile ? "1rem" : "1.5rem" };
+  const primaryBtnStyle = { width: isMobile ? "auto" : "100%", padding: isMobile ? "0.5rem 0.75rem" : "0.75rem", fontSize: isMobile ? 16 : 18, marginBottom: isMobile ? 0 : "1rem" };
+  const secondaryBtnStyle = { width: isMobile ? "auto" : "100%", padding: isMobile ? "0.5rem 0.75rem" : "0.5rem", marginBottom: isMobile ? 0 : "1rem" };
+
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "row", fontFamily: "sans-serif" }}>
-      <div style={{ width: 320, borderRight: "1px solid #eee", padding: "1rem" }}>
-        <button onClick={endReview} disabled={reviewEnded} style={{ width: "100%", padding: "0.75rem", fontSize: 18, marginBottom: "1rem" }}>{reviewEnded ? "Session Ended" : "End Session"}</button>
-        <button onClick={onBack} style={{ width: "100%", padding: "0.5rem", marginBottom: "1rem" }}>Back</button>
-        <div style={{ color: "#666", fontSize: 14, marginBottom: 8 }}>
+    <div style={containerStyle}>
+      <div style={sidebarStyle}>
+        {isMobile ? (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", marginBottom: 6 }}>
+            <button onClick={endReview} disabled={reviewEnded} style={primaryBtnStyle}>{reviewEnded ? "Session Ended" : "End Session"}</button>
+            <button onClick={onBack} style={secondaryBtnStyle}>Back</button>
+          </div>
+        ) : (
+          <>
+            <button onClick={endReview} disabled={reviewEnded} style={primaryBtnStyle}>{reviewEnded ? "Session Ended" : "End Session"}</button>
+            <button onClick={onBack} style={secondaryBtnStyle}>Back</button>
+          </>
+        )}
+        <div style={{ color: "#666", fontSize: isMobile ? 12 : 14, marginBottom: 6 }}>
           Review started: {reviewStartMs ? new Date(reviewStartMs).toLocaleTimeString() : "-"}
         </div>
         {reviewStartMs && (
-          <div style={{ color: "#222", fontSize: 18, fontVariantNumeric: "tabular-nums", marginBottom: 8 }}>
+          <div style={{ color: "#222", fontSize: isMobile ? 16 : 18, fontVariantNumeric: "tabular-nums", marginBottom: isMobile ? 4 : 8 }}>
             Elapsed: {formatDurationMs(elapsedMs)}
           </div>
         )}
       </div>
-      <div style={{ flex: 1, padding: "1.5rem" }}>
+      <div style={contentStyle}>
         <h2 style={{ marginTop: 0 }}>Word Review</h2>
         <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
           <label>
@@ -193,19 +217,19 @@ export default function Review({ onBack }) {
           <p>No words available.</p>
         ) : (
           <div>
-            <div style={{ fontSize: 36, marginBottom: 16 }}>
+            <div style={{ fontSize: isMobile ? 32 : 36, marginBottom: 16, textAlign: "center" }}>
               <strong>{currentWord.word}</strong>
             </div>
             {showHint && currentWord.examples && currentWord.examples.length > 0 && (
-              <ul style={{ paddingLeft: 18, marginTop: 4, marginBottom: 16 }}>
+              <ul style={{ paddingLeft: 18, marginTop: 4, marginBottom: 16, lineHeight: 1.5 }}>
                 {currentWord.examples.map((ex, idx) => (
                   <li key={idx} style={{ color: "#444" }}>{ex}</li>
                 ))}
               </ul>
             )}
-            <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={() => setShowHint(true)} disabled={reviewEnded} style={{ padding: "0.5rem 1rem" }}>Hint</button>
-              <button onClick={nextWord} disabled={reviewEnded} style={{ padding: "0.5rem 1rem" }}>Next</button>
+            <div style={{ display: "flex", gap: 12, justifyContent: isMobile ? "center" : "flex-start" }}>
+              <button onClick={() => setShowHint(true)} disabled={reviewEnded} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>Hint</button>
+              <button onClick={nextWord} disabled={reviewEnded} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>Next</button>
             </div>
           </div>
         )}
