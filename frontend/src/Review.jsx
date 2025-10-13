@@ -101,7 +101,7 @@ export default function Review({ onBack }) {
         const data = await res.json();
         setWords(data);
         if (shouldShuffle(m)) {
-          const weights = data.map((w) => computeFamiliarity(w));
+          const weights = data.map((w) => Math.max(0, 1 - computeFamiliarity(w)));
           const ord = weightedOrder(data.length, weights);
           setOrder(ord);
         } else {
