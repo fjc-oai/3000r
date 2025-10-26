@@ -296,6 +296,51 @@ function App() {
     return result; // [today, yesterday, ...]
   }
 
+  // --- Stats helpers ---
+  function totalMinutesAll() {
+    let sum = 0;
+    for (const s of sessions) {
+      sum += Number(s.duration) || 0;
+    }
+    return sum;
+  }
+
+  function averageMinutesLastNDays(numDays) {
+    const days = aggregateSessionsLastNDays(numDays);
+    const total = days.reduce((acc, d) => acc + (Number(d.minutes) || 0), 0);
+    return Math.round(total / numDays);
+  }
+
+  function toHoursOneDecimal(totalMinutes) {
+    const hours = totalMinutes / 60;
+    return Math.round(hours * 10) / 10;
+  }
+
+  function lastNDaysMinutes(numDays) {
+    return aggregateSessionsLastNDays(numDays).map((d) => Number(d.minutes) || 0);
+  }
+
+  function sparkline(values) {
+    if (!values || values.length === 0) return "";
+    // Use vertical bars for better readability across fonts
+    const blocks = ["▏","▎","▍","▌","▋","▊","▉","█"];
+    // show oldest → newest
+    const vals = values.slice().reverse();
+    const max = Math.max(...vals);
+    const min = Math.min(...vals);
+    const range = Math.max(1, max - min);
+    return vals
+      .map((v) => {
+        const idx = Math.floor(((v - min) / range) * (blocks.length - 1));
+        return blocks[Math.min(blocks.length - 1, Math.max(0, idx))];
+      })
+      .join("");
+  }
+
+  function sumMinutes(values) {
+    return (values || []).reduce((acc, v) => acc + (Number(v) || 0), 0);
+  }
+
   function currentRangeFromMode(mode) {
     if (mode === "all") return { start: null, end: null };
     if (mode === "day") {
@@ -408,13 +453,20 @@ function App() {
             </form>
           </div>
           <div style={{ width: "100%", marginTop: 12 }}>
-            <h3 style={{ textAlign: "center" }}>Past Week (min/day)</h3>
-            <ul style={{ paddingLeft: 18 }}>
-              {aggregateSessionsLastNDays(7).map((d) => (
-                <li key={d.date} style={{ marginBottom: 6, textAlign: "left" }}>
-                  <strong>{d.date}</strong> – {d.minutes} min
-                </li>
-              ))}
+            <h3 style={{ textAlign: "center" }}>Learning Stats</h3>
+            <ul style={{ paddingLeft: 18, marginBottom: 8 }}>
+              <li>
+                <strong>Past week</strong>: {averageMinutesLastNDays(7)} m/d
+                <ul style={{ paddingLeft: 18, marginTop: 4 }}>
+                  {aggregateSessionsLastNDays(7).map((d) => (
+                    <li key={d.date} style={{ marginBottom: 6, textAlign: "left" }}>
+                      <strong>{d.date}</strong> – {d.minutes} min
+                    </li>
+                  ))}
+                </ul>
+              </li>
+              <li><strong>Past month</strong>: {averageMinutesLastNDays(30)} m/d</li>
+              <li><strong>Total</strong>: {toHoursOneDecimal(totalMinutesAll())} hr</li>
             </ul>
           </div>
         </div>
@@ -513,14 +565,23 @@ function App() {
             Elapsed: {formatDurationMs(elapsedMs)}
           </div>
         )}
-        <h3 style={{ marginTop: "1.5rem" }}>Past Week (min/day)</h3>
-        <ul style={{ paddingLeft: 18 }}>
-          {aggregateSessionsLastNDays(7).map((d) => (
-            <li key={d.date} style={{ marginBottom: 6 }}>
-              <strong>{d.date}</strong> – {d.minutes} min
+        <div style={{ marginTop: "1rem" }}>
+          <h4 style={{ margin: "0 0 6px 0" }}>Learning Stats</h4>
+          <ul style={{ paddingLeft: 18, marginTop: 4 }}>
+            <li>
+              Past week: {averageMinutesLastNDays(7)} m/d
+              <ul style={{ paddingLeft: 18, marginTop: 4 }}>
+                {aggregateSessionsLastNDays(7).map((d) => (
+                  <li key={d.date} style={{ marginBottom: 6 }}>
+                    <strong>{d.date}</strong> – {d.minutes} min
+                  </li>
+                ))}
+              </ul>
             </li>
-          ))}
-        </ul>
+            <li>Past month: {averageMinutesLastNDays(30)} m/d</li>
+            <li>Total: {toHoursOneDecimal(totalMinutesAll())} hr</li>
+          </ul>
+        </div>
       </div>
       <div style={{ flex: 1, padding: "1.5rem" }}>
         {(reviewing || sessionEnded) ? (

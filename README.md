@@ -22,6 +22,15 @@ pip install -r requirements.txt
 
 # Features
 
+## 10/25
+- [x] learning stats
+  - [x] what to show: avg past week, past month, total hours
+  - [x] where to show
+- [x] word bank: show in order
+- [ ] change the layout 
+  - [ ] quick add section
+  - [ ] quick add session provide date
+
 ## 10/11 
 - [x] bash script to automate cmds
 - [x] word review - alpha 
