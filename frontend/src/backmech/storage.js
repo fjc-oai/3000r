@@ -53,4 +53,17 @@ export async function saveServerSchedule(name, schedule) {
   return await res.json(); // {id, name, schedule}
 }
 
+export async function updateServerSchedule(id, name, schedule) {
+  const res = await fetch(`${API}/back_schedules/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, schedule })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error("Failed to update schedule: " + JSON.stringify(err));
+  }
+  return await res.json(); // {id, name, schedule}
+}
+
 

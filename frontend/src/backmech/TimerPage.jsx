@@ -3,7 +3,7 @@ import TimerView from "./TimerView";
 import ScheduleBuilder from "./ScheduleBuilder";
 import { PRESET_SCHEDULES, createId } from "./presets";
 import { flattenSchedule, totalSeconds, formatDuration } from "./engine";
-import { fetchServerSchedules, saveServerSchedule } from "./storage";
+import { fetchServerSchedules, saveServerSchedule, updateServerSchedule } from "./storage";
 
 function defaultCustomSchedule() {
   return {
@@ -23,11 +23,10 @@ function defaultCustomSchedule() {
 
 export default function TimerPage({ onBack }) {
   const [mode, setMode] = useState("preset"); // preset | custom
-  const [selectedPresetId, setSelectedPresetId] = useState(
-    PRESET_SCHEDULES[0] ? `preset:${PRESET_SCHEDULES[0].id}` : ""
-  );
+  const [selectedPresetId, setSelectedPresetId] = useState("");
   const [custom, setCustom] = useState(defaultCustomSchedule());
   const [runningSchedule, setRunningSchedule] = useState(null);
+  const [editTarget, setEditTarget] = useState(null); // null | { type: 'server', id, name } | { type: 'builtin', id }
 
   const [serverPresets, setServerPresets] = useState([]);
 
@@ -40,15 +39,18 @@ export default function TimerPage({ onBack }) {
     return () => { cancelled = true; };
   }, []);
 
-  const allPresets = PRESET_SCHEDULES;
+  useEffect(() => {
+    if (!selectedPresetId && serverPresets && serverPresets.length > 0) {
+      setSelectedPresetId(`server:${serverPresets[0].id}`);
+    }
+  }, [serverPresets, selectedPresetId]);
+
+  // Built-in presets removed; only server presets are used
 
   function start() {
     let schedule = null;
     if (mode === "preset") {
-      if (selectedPresetId.startsWith("preset:")) {
-        const id = selectedPresetId.slice("preset:".length);
-        schedule = allPresets.find((p) => p.id === id);
-      } else if (selectedPresetId.startsWith("server:")) {
+      if (selectedPresetId.startsWith("server:")) {
         const sid = Number(selectedPresetId.slice("server:".length));
         const s = serverPresets.find((x) => x.id === sid);
         if (s) schedule = { id: `server_${s.id}`, name: s.name, ...s.schedule };
@@ -68,12 +70,27 @@ export default function TimerPage({ onBack }) {
     try {
       const payload = { ...sch };
       const name = payload.name || "Custom Back Routine";
-      const saved = await saveServerSchedule(name, payload);
-      setServerPresets((prev) => [{ id: saved.id, name: saved.name, schedule: saved.schedule }, ...prev]);
-      // Switch to preset mode and select the newly saved one
-      setMode("preset");
-      setSelectedPresetId(`server:${saved.id}`);
-      alert("Saved.");
+      if (editTarget && editTarget.type === "server") {
+        const updated = await updateServerSchedule(editTarget.id, name, payload);
+        setServerPresets((prev) => {
+          const arr = prev.slice();
+          const idx = arr.findIndex((s) => s.id === updated.id);
+          if (idx >= 0) arr[idx] = { id: updated.id, name: updated.name, schedule: updated.schedule };
+          else arr.unshift({ id: updated.id, name: updated.name, schedule: updated.schedule });
+          return arr;
+        });
+        setMode("preset");
+        setSelectedPresetId(`server:${editTarget.id}`);
+        setEditTarget(null);
+        alert("Updated.");
+      } else {
+        const saved = await saveServerSchedule(name, payload);
+        setServerPresets((prev) => [{ id: saved.id, name: saved.name, schedule: saved.schedule }, ...prev]);
+        // Switch to preset mode and select the newly saved one
+        setMode("preset");
+        setSelectedPresetId(`server:${saved.id}`);
+        alert("Saved.");
+      }
     } catch (e) {
       alert(e.message || "Failed to save.");
     }
@@ -90,11 +107,6 @@ export default function TimerPage({ onBack }) {
   function getSelectedPresetSchedule() {
     if (mode !== "preset") return null;
     if (!selectedPresetId) return null;
-    if (selectedPresetId.startsWith("preset:")) {
-      const id = selectedPresetId.slice("preset:".length);
-      const s = allPresets.find((p) => p.id === id);
-      return s || null;
-    }
     if (selectedPresetId.startsWith("server:")) {
       const sid = Number(selectedPresetId.slice("server:".length));
       const s = serverPresets.find((x) => x.id === sid);
@@ -132,15 +144,28 @@ export default function TimerPage({ onBack }) {
             <label>
               <span style={{ marginRight: 6 }}>Preset:</span>
               <select value={selectedPresetId} onChange={(e) => setSelectedPresetId(e.target.value)} style={{ padding: 6, minWidth: 260 }}>
-                {allPresets.map((p) => (
-                  <option key={`preset:${p.id}`} value={`preset:${p.id}`}>{`Preset: ${p.name}`}</option>
-                ))}
                 {serverPresets.map((s) => (
                   <option key={`server:${s.id}`} value={`server:${s.id}`}>{`Saved: ${s.name}`}</option>
                 ))}
               </select>
             </label>
             <button onClick={start} style={{ padding: "0.6rem 1rem" }}>Start Timer</button>
+            {selectedPresetId && selectedPresetId.startsWith("server:") && (
+              <button
+                onClick={() => {
+                  const sid = Number(selectedPresetId.slice("server:".length));
+                  const s = serverPresets.find((x) => x.id === sid);
+                  if (!s) return;
+                  setCustom({ name: s.name, ...s.schedule });
+                  setEditTarget({ type: "server", id: sid, name: s.name });
+                  setMode("custom");
+                }}
+                style={{ padding: "0.6rem 1rem" }}
+              >
+                Edit
+              </button>
+            )}
+            
           </div>
           {selectedPresetSchedule && (
             <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 8 }}>

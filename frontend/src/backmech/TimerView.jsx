@@ -56,16 +56,32 @@ export default function TimerView({ schedule, onBackToConfig }) {
     }
   }
 
-  // Announce start of each rep when a hold phase begins
+  // Announce transitions
+  // - At start of a hold: exercise name (if new exercise) then "Start, rep N"
+  // - Immediately after a hold ends (break begins): "Rest"
   useEffect(() => {
     const cur = phases[index] || null;
     if (!cur) return;
     if (!running) return;
-    if (cur.type === "hold") {
-      speak("Start");
+    const prev = index > 0 ? (phases[index - 1] || null) : null;
+    if (cur.type === "break" && prev && prev.type === "hold") {
+      speak("Rest");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index]);
+    if (cur.type === "hold") {
+      const curEx = typeof cur?.meta?.exerciseIndex === "number" ? cur.meta.exerciseIndex : undefined;
+      const prevEx = index > 0 && phases[index - 1] ? phases[index - 1]?.meta?.exerciseIndex : undefined;
+      if (curEx !== undefined && curEx !== prevEx) {
+        const exName = schedule?.exercises?.[curEx]?.name;
+        if (exName) speak(exName);
+      }
+      const repNum = typeof cur?.meta?.repIndex === "number" ? (cur.meta.repIndex + 1) : undefined;
+      if (repNum !== undefined) {
+        speak(`Start, rep ${repNum}`);
+      } else {
+        speak("Start");
+      }
+    }
+  }, [index, phases, running, schedule]);
 
   // Countdown 3-2-1 at the end of any phase (holds and breaks)
   useEffect(() => {

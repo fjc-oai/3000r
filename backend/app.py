@@ -343,6 +343,38 @@ def list_back_schedules():
     return [{"id": r.id, "name": r.name, "schedule": r.payload} for r in rows]
 
 
+class BackScheduleUpdate(BaseModel):
+    name: Optional[str] = None
+    schedule: Optional[dict] = None
+
+
+@app.put("/api/back_schedules/{sid}", response_model=BackSchedule)
+def update_back_schedule(sid: int, upd: BackScheduleUpdate):
+    with engine.begin() as conn:
+        values = {}
+        if upd.name is not None:
+            values["name"] = upd.name
+        if upd.schedule is not None:
+            values["payload"] = upd.schedule
+        if values:
+            conn.execute(
+                sa.update(back_schedules).where(back_schedules.c.id == sid).values(**values)
+            )
+        row = conn.execute(
+            sa.select(back_schedules.c.id, back_schedules.c.name, back_schedules.c.payload).where(back_schedules.c.id == sid)
+        ).first()
+        if row is None:
+            # create if missing and full payload provided
+            if upd.name is not None and upd.schedule is not None:
+                result = conn.execute(sa.insert(back_schedules).values(name=upd.name, payload=upd.schedule))
+                inserted_pk = result.inserted_primary_key
+                new_id = inserted_pk[0] if inserted_pk and len(inserted_pk) > 0 else conn.execute(sa.select(sa.func.max(back_schedules.c.id))).scalar_one()
+                return {"id": new_id, "name": upd.name, "schedule": upd.schedule}
+            else:
+                raise ValueError("Schedule not found and insufficient data to create")
+    return {"id": row.id, "name": row.name, "schedule": row.payload}
+
+
 @app.get("/api/healthz")
 def healthz():
     return {"ok": True, "time": datetime.utcnow().isoformat()}
