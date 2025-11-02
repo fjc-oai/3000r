@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import Review from "./Review";
+import BackMechTimer from "./backmech/TimerPage";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
@@ -412,6 +413,9 @@ function App() {
             <button onClick={() => setPage("wordBank")} style={{ fontSize: 24, padding: "1rem 2rem" }}>Word Bank</button>
             <button onClick={() => setPage("review")} style={{ fontSize: 24, padding: "1rem 2rem" }}>Review Words</button>
           </div>
+          <div style={{ marginBottom: "1rem" }}>
+            <button onClick={() => setPage("backMech")} style={{ fontSize: 24, padding: "1rem 2rem", width: "100%" }}>Back Mechanic Timer</button>
+          </div>
           <div style={{ width: "100%", padding: 12, border: "1px solid #eee", borderRadius: 8, background: "#fafafa" }}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>Quick Add</h3>
             <form onSubmit={quickLogSession} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
@@ -488,6 +492,10 @@ function App() {
 
   if (page === "review") {
     return <Review onBack={() => setPage("home")} />;
+  }
+
+  if (page === "backMech") {
+    return <BackMechTimer onBack={() => setPage("home")} />;
   }
 
   if (page === "wordBank") {

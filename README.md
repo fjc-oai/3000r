@@ -22,6 +22,12 @@ pip install -r requirements.txt
 
 # Features
 
+## 11/02
+- [ ] back mechnican 
+  - [ ] customized timer
+  - [ ] presets
+  - [ ] bg music
+
 ## 10/25
 - [x] learning stats
   - [x] what to show: avg past week, past month, total hours
