@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import TimerView from "./TimerView";
 import ScheduleBuilder from "./ScheduleBuilder";
 import { PRESET_SCHEDULES, createId } from "./presets";
-import { loadCustomSchedules, saveCustomSchedule } from "./storage";
+import { flattenSchedule, totalSeconds, formatDuration } from "./engine";
+import { fetchServerSchedules, saveServerSchedule } from "./storage";
 
 function defaultCustomSchedule() {
   return {
@@ -22,17 +23,39 @@ function defaultCustomSchedule() {
 
 export default function TimerPage({ onBack }) {
   const [mode, setMode] = useState("preset"); // preset | custom
-  const [selectedPresetId, setSelectedPresetId] = useState(PRESET_SCHEDULES[0]?.id || "");
+  const [selectedPresetId, setSelectedPresetId] = useState(
+    PRESET_SCHEDULES[0] ? `preset:${PRESET_SCHEDULES[0].id}` : ""
+  );
   const [custom, setCustom] = useState(defaultCustomSchedule());
   const [runningSchedule, setRunningSchedule] = useState(null);
 
-  const customSaved = useMemo(() => loadCustomSchedules(), []);
+  const [serverPresets, setServerPresets] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const data = await fetchServerSchedules();
+      if (!cancelled) setServerPresets(data);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const allPresets = PRESET_SCHEDULES;
 
   function start() {
-    const schedule = mode === "preset"
-      ? allPresets.find((p) => p.id === selectedPresetId)
-      : custom;
+    let schedule = null;
+    if (mode === "preset") {
+      if (selectedPresetId.startsWith("preset:")) {
+        const id = selectedPresetId.slice("preset:".length);
+        schedule = allPresets.find((p) => p.id === id);
+      } else if (selectedPresetId.startsWith("server:")) {
+        const sid = Number(selectedPresetId.slice("server:".length));
+        const s = serverPresets.find((x) => x.id === sid);
+        if (s) schedule = { id: `server_${s.id}`, name: s.name, ...s.schedule };
+      }
+    } else {
+      schedule = custom;
+    }
     if (!schedule) return;
     setRunningSchedule(schedule);
   }
@@ -41,10 +64,19 @@ export default function TimerPage({ onBack }) {
     setRunningSchedule(null);
   }
 
-  function handleSaveCurrentCustom(sch) {
-    const toSave = { ...sch, id: sch.id || createId("sch") };
-    saveCustomSchedule(toSave);
-    alert("Saved locally.");
+  async function handleSaveCurrentCustom(sch) {
+    try {
+      const payload = { ...sch };
+      const name = payload.name || "Custom Back Routine";
+      const saved = await saveServerSchedule(name, payload);
+      setServerPresets((prev) => [{ id: saved.id, name: saved.name, schedule: saved.schedule }, ...prev]);
+      // Switch to preset mode and select the newly saved one
+      setMode("preset");
+      setSelectedPresetId(`server:${saved.id}`);
+      alert("Saved.");
+    } catch (e) {
+      alert(e.message || "Failed to save.");
+    }
   }
 
   if (runningSchedule) {
@@ -54,6 +86,27 @@ export default function TimerPage({ onBack }) {
       </div>
     );
   }
+
+  function getSelectedPresetSchedule() {
+    if (mode !== "preset") return null;
+    if (!selectedPresetId) return null;
+    if (selectedPresetId.startsWith("preset:")) {
+      const id = selectedPresetId.slice("preset:".length);
+      const s = allPresets.find((p) => p.id === id);
+      return s || null;
+    }
+    if (selectedPresetId.startsWith("server:")) {
+      const sid = Number(selectedPresetId.slice("server:".length));
+      const s = serverPresets.find((x) => x.id === sid);
+      if (!s) return null;
+      return { id: `server_${s.id}`, name: s.name, ...s.schedule };
+    }
+    return null;
+  }
+
+  const selectedPresetSchedule = getSelectedPresetSchedule();
+  const selectedPhases = selectedPresetSchedule ? flattenSchedule(selectedPresetSchedule) : [];
+  const selectedTotal = selectedPresetSchedule ? totalSeconds(selectedPhases) : 0;
 
   return (
     <div style={{ minHeight: "100vh", fontFamily: "sans-serif", padding: "1rem", maxWidth: 1100, margin: "0 auto" }}>
@@ -74,26 +127,37 @@ export default function TimerPage({ onBack }) {
       </div>
 
       {mode === "preset" ? (
-        <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 8, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <label>
-            <span style={{ marginRight: 6 }}>Preset:</span>
-            <select value={selectedPresetId} onChange={(e) => setSelectedPresetId(e.target.value)} style={{ padding: 6, minWidth: 260 }}>
-              {allPresets.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </label>
-          {customSaved && customSaved.length > 0 && (
-            <details>
-              <summary style={{ cursor: "pointer" }}>Saved custom schedules</summary>
-              <ul style={{ paddingLeft: 18, marginTop: 6 }}>
-                {customSaved.map((s) => (
-                  <li key={s.id}>{s.name}</li>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 8, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <label>
+              <span style={{ marginRight: 6 }}>Preset:</span>
+              <select value={selectedPresetId} onChange={(e) => setSelectedPresetId(e.target.value)} style={{ padding: 6, minWidth: 260 }}>
+                {allPresets.map((p) => (
+                  <option key={`preset:${p.id}`} value={`preset:${p.id}`}>{`Preset: ${p.name}`}</option>
                 ))}
-              </ul>
-            </details>
+                {serverPresets.map((s) => (
+                  <option key={`server:${s.id}`} value={`server:${s.id}`}>{`Saved: ${s.name}`}</option>
+                ))}
+              </select>
+            </label>
+            <button onClick={start} style={{ padding: "0.6rem 1rem" }}>Start Timer</button>
+          </div>
+          {selectedPresetSchedule && (
+            <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <strong>{selectedPresetSchedule.name}</strong>
+                <span style={{ fontVariantNumeric: "tabular-nums", color: "#444" }}>Total: {formatDuration(selectedTotal)}</span>
+              </div>
+              <ol style={{ paddingLeft: 18, margin: 0, lineHeight: 1.6 }}>
+                {selectedPhases.map((p, i) => (
+                  <li key={i}>
+                    <span>{p.label}</span>
+                    <span style={{ marginLeft: 8, fontVariantNumeric: "tabular-nums", color: "#666" }}>{formatDuration(p.durationSeconds)}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
           )}
-          <button onClick={start} style={{ padding: "0.6rem 1rem" }}>Start Timer</button>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

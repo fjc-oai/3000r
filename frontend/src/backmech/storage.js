@@ -1,4 +1,5 @@
 const KEY = "backmech_schedules_v1";
+const API = import.meta.env.VITE_API_URL || "/api";
 
 export function loadCustomSchedules() {
   try {
@@ -25,6 +26,31 @@ export function saveCustomSchedule(schedule) {
 export function deleteCustomSchedule(id) {
   const all = loadCustomSchedules().filter((s) => s && s.id !== id);
   localStorage.setItem(KEY, JSON.stringify(all));
+}
+
+export async function fetchServerSchedules() {
+  try {
+    const res = await fetch(`${API}/back_schedules`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    return data; // [{id, name, schedule}]
+  } catch (e) {
+    return [];
+  }
+}
+
+export async function saveServerSchedule(name, schedule) {
+  const res = await fetch(`${API}/back_schedules`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, schedule })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error("Failed to save schedule: " + JSON.stringify(err));
+  }
+  return await res.json(); // {id, name, schedule}
 }
 
 

@@ -10,21 +10,33 @@ export default function ScheduleBuilder({ schedule, onChange, onSave }) {
     onChange({ ...schedule, ...partial });
   }
 
-  function updateExercise(idx, partial) {
+  function updateExercise(idx, partial, options = {}) {
     const arr = schedule.exercises.slice();
-    arr[idx] = { ...arr[idx], ...partial };
+    const next = { ...arr[idx], ...partial };
+    if (options.removeSets) delete next.sets;
+    arr[idx] = next;
     update({ exercises: arr });
   }
 
-  function updateSet(exIdx, setIdx, partial) {
-    const ex = schedule.exercises[exIdx];
-    const sets = ex.sets.slice();
-    sets[setIdx] = { ...sets[setIdx], ...partial };
-    updateExercise(exIdx, { sets });
+  function ensureLen(arr, len, fillVal) {
+    const out = Array.isArray(arr) ? arr.slice(0, len) : [];
+    while (out.length < len) out.push(fillVal);
+    return out;
+  }
+
+  function deriveUniform(ex) {
+    const setsCount = Number(ex?.setsCount) || (Array.isArray(ex?.sets) ? ex.sets.length : 1);
+    const baseSet = Array.isArray(ex?.sets) && ex.sets.length > 0 ? ex.sets[0] : null;
+    const repsPerSet = Number(ex?.repsPerSet) || Number(baseSet?.reps) || 1;
+    const repHoldSeconds = Number(ex?.repHoldSeconds) || Number(baseSet?.holdSeconds) || 10;
+    const breakBetweenRepsSeconds = Number(ex?.breakBetweenRepsSeconds) || Number(baseSet?.breakBetweenRepsSeconds) || 10;
+    const breakBetweenSetsSeconds = Number(ex?.breakBetweenSetsSeconds) || 30;
+    const setReps = ensureLen(ex?.setReps, setsCount, repsPerSet);
+    return { setsCount, repsPerSet, repHoldSeconds, breakBetweenRepsSeconds, breakBetweenSetsSeconds, setReps };
   }
 
   function addExercise() {
-    const ex = { id: createId("ex"), name: "New Exercise", breakBetweenSetsSeconds: 30, sets: [ { id: createId("set"), reps: 3, holdSeconds: 10, breakBetweenRepsSeconds: 10 } ] };
+    const ex = { id: createId("ex"), name: "New Exercise", breakBetweenSetsSeconds: 30, setsCount: 2, repsPerSet: 5, repHoldSeconds: 10, breakBetweenRepsSeconds: 10, setReps: [5,5] };
     update({ exercises: [...schedule.exercises, ex] });
   }
 
@@ -34,18 +46,7 @@ export default function ScheduleBuilder({ schedule, onChange, onSave }) {
     update({ exercises: arr });
   }
 
-  function addSet(exIdx) {
-    const ex = schedule.exercises[exIdx];
-    const sets = [...ex.sets, { id: createId("set"), reps: 3, holdSeconds: 10, breakBetweenRepsSeconds: 10 }];
-    updateExercise(exIdx, { sets });
-  }
-
-  function removeSet(exIdx, setIdx) {
-    const ex = schedule.exercises[exIdx];
-    const sets = ex.sets.slice();
-    sets.splice(setIdx, 1);
-    updateExercise(exIdx, { sets });
-  }
+  // per-rep config is uniform across exercise; no per-set editing
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -93,67 +94,70 @@ export default function ScheduleBuilder({ schedule, onChange, onSave }) {
                     <input
                       type="number"
                       min={0}
-                      value={ex.breakBetweenSetsSeconds}
-                      onChange={(e) => updateExercise(exIdx, { breakBetweenSetsSeconds: Math.max(0, Number(e.target.value) || 0) })}
-                      style={{ width: 100, padding: 6 }}
+                      value={Number(ex.breakBetweenSetsSeconds) || 0}
+                      onChange={(e) => updateExercise(exIdx, { breakBetweenSetsSeconds: Math.max(0, Number(e.target.value) || 0) }, { removeSets: true })}
+                      style={{ width: 120, padding: 6 }}
                     />
                   </label>
                 </div>
                 <button onClick={() => removeExercise(exIdx)} style={{ padding: "0.4rem 0.6rem" }}>Remove</button>
               </div>
-              <div style={{ marginTop: 8 }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ textAlign: "left", color: "#555" }}>
-                      <th style={{ padding: 6 }}>Set</th>
-                      <th style={{ padding: 6 }}>Reps</th>
-                      <th style={{ padding: 6 }}>Hold (s)</th>
-                      <th style={{ padding: 6 }}>Break between reps (s)</th>
-                      <th style={{ padding: 6 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ex.sets.map((set, setIdx) => (
-                      <tr key={set.id}>
-                        <td style={{ padding: 6 }}>{setIdx + 1}</td>
-                        <td style={{ padding: 6 }}>
-                          <input
-                            type="number"
-                            min={0}
-                            value={set.reps}
-                            onChange={(e) => updateSet(exIdx, setIdx, { reps: Math.max(0, Number(e.target.value) || 0) })}
-                            style={{ width: 80, padding: 6 }}
-                          />
-                        </td>
-                        <td style={{ padding: 6 }}>
-                          <input
-                            type="number"
-                            min={0}
-                            value={set.holdSeconds}
-                            onChange={(e) => updateSet(exIdx, setIdx, { holdSeconds: Math.max(0, Number(e.target.value) || 0) })}
-                            style={{ width: 80, padding: 6 }}
-                          />
-                        </td>
-                        <td style={{ padding: 6 }}>
-                          <input
-                            type="number"
-                            min={0}
-                            value={set.breakBetweenRepsSeconds}
-                            onChange={(e) => updateSet(exIdx, setIdx, { breakBetweenRepsSeconds: Math.max(0, Number(e.target.value) || 0) })}
-                            style={{ width: 140, padding: 6 }}
-                          />
-                        </td>
-                        <td style={{ padding: 6 }}>
-                          <button onClick={() => removeSet(exIdx, setIdx)} style={{ padding: "0.3rem 0.5rem" }}>Remove</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div style={{ marginTop: 8 }}>
-                  <button onClick={() => addSet(exIdx)} style={{ padding: "0.4rem 0.6rem" }}>Add Set</button>
+              {(() => { const u = deriveUniform(ex); return (
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+                  <label>
+                    <span style={{ marginRight: 6 }}>Sets:</span>
+                    <input type="number" min={0} value={u.setsCount}
+                      onChange={(e) => {
+                        const nextCount = Math.max(0, Number(e.target.value) || 0);
+                        const nextSetReps = ensureLen(ex?.setReps, nextCount, u.repsPerSet);
+                        updateExercise(exIdx, { setsCount: nextCount, setReps: nextSetReps }, { removeSets: true });
+                      }}
+                      style={{ width: 100, padding: 6 }} />
+                  </label>
+                  <label>
+                    <span style={{ marginRight: 6 }}>Reps per set:</span>
+                    <input type="number" min={0} value={u.repsPerSet}
+                      onChange={(e) => {
+                        const val = Math.max(0, Number(e.target.value) || 0);
+                        const nextSetReps = Array(u.setsCount).fill(val);
+                        updateExercise(exIdx, { repsPerSet: val, setReps: nextSetReps }, { removeSets: true });
+                      }}
+                      style={{ width: 120, padding: 6 }} />
+                  </label>
+                  <label>
+                    <span style={{ marginRight: 6 }}>Hold per rep (s):</span>
+                    <input type="number" min={0} value={u.repHoldSeconds}
+                      onChange={(e) => updateExercise(exIdx, { repHoldSeconds: Math.max(0, Number(e.target.value) || 0) }, { removeSets: true })}
+                      style={{ width: 140, padding: 6 }} />
+                  </label>
+                  <label>
+                    <span style={{ marginRight: 6 }}>Break between reps (s):</span>
+                    <input type="number" min={0} value={u.breakBetweenRepsSeconds}
+                      onChange={(e) => updateExercise(exIdx, { breakBetweenRepsSeconds: Math.max(0, Number(e.target.value) || 0) }, { removeSets: true })}
+                      style={{ width: 180, padding: 6 }} />
+                  </label>
                 </div>
-              </div>
+              ); })()}
+              {(() => { const u = deriveUniform(ex); return (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>Reps per set</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 8 }}>
+                    {u.setReps.map((val, i) => (
+                      <label key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span>Set {i + 1}:</span>
+                        <input type="number" min={0} value={val}
+                          onChange={(e) => {
+                            const v = Math.max(0, Number(e.target.value) || 0);
+                            const arr = u.setReps.slice();
+                            arr[i] = v;
+                            updateExercise(exIdx, { setReps: arr }, { removeSets: true });
+                          }}
+                          style={{ width: 80, padding: 6 }} />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ); })()}
             </div>
           ))}
           <button onClick={addExercise} style={{ padding: "0.5rem 0.75rem", alignSelf: "flex-start" }}>Add Exercise</button>

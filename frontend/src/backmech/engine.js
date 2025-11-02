@@ -24,9 +24,33 @@ export function flattenSchedule(schedule) {
   if (!schedule || !Array.isArray(schedule.exercises)) return phases;
   const bex = Number(schedule.breakBetweenExercisesSeconds) || 0;
   schedule.exercises.forEach((ex, exIdx) => {
-    const sets = Array.isArray(ex?.sets) ? ex.sets : [];
-    const bsets = Number(ex?.breakBetweenSetsSeconds) || 0;
-    sets.forEach((set, setIdx) => {
+    const bsets = Math.max(0, Number(ex?.breakBetweenSetsSeconds) || 0);
+    // Support two shapes:
+    // 1) Legacy: ex.sets: [{ reps, holdSeconds, breakBetweenRepsSeconds }]
+    // 2) Simplified: ex.setsCount, ex.repsPerSet, ex.repHoldSeconds, ex.breakBetweenRepsSeconds, ex.setReps (array)
+    let setsData = null;
+    if (Array.isArray(ex?.sets) && ex.sets.length > 0) {
+      setsData = ex.sets;
+    } else {
+      const setsCount = Math.max(0, Number(ex?.setsCount) || 0);
+      const repsPerSet = Math.max(0, Number(ex?.repsPerSet) || 0);
+      const repHold = Math.max(0, Number(ex?.repHoldSeconds) || 0);
+      const breps = Math.max(0, Number(ex?.breakBetweenRepsSeconds) || 0);
+      const setRepsArr = Array.isArray(ex?.setReps) && ex.setReps.length > 0
+        ? ex.setReps.map((n) => Math.max(0, Number(n) || 0))
+        : null;
+      if (setRepsArr) {
+        setsData = setRepsArr.map((reps) => ({ reps, holdSeconds: repHold, breakBetweenRepsSeconds: breps }));
+      } else {
+        setsData = Array.from({ length: setsCount }, () => ({
+          reps: repsPerSet,
+          holdSeconds: repHold,
+          breakBetweenRepsSeconds: breps,
+        }));
+      }
+    }
+
+    setsData.forEach((set, setIdx) => {
       const reps = Math.max(0, Number(set?.reps) || 0);
       const hold = Math.max(0, Number(set?.holdSeconds) || 0);
       const breps = Math.max(0, Number(set?.breakBetweenRepsSeconds) || 0);
@@ -48,7 +72,7 @@ export function flattenSchedule(schedule) {
           });
         }
       }
-      if (setIdx < sets.length - 1 && isPositiveNumber(bsets)) {
+      if (setIdx < setsData.length - 1 && isPositiveNumber(bsets)) {
         phases.push({ type: "break", label: "Break between sets", durationSeconds: bsets, meta: { exerciseIndex: exIdx } });
       }
     });

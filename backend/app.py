@@ -109,6 +109,14 @@ topics = sa.Table(
     sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
     sa.Column("name", sa.String(255), nullable=False),
 )
+back_schedules = sa.Table(
+    "back_schedules",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+    sa.Column("name", sa.String(255), nullable=False),
+    sa.Column("payload", sa.JSON, nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+)
 metadata.create_all(engine)  # CREATE TABLE IF NOT EXISTS
 
 
@@ -300,6 +308,39 @@ def list_topics():
             sa.select(topics.c.id, topics.c.name).order_by(topics.c.id.desc())
         ).all()
     return [{"id": r.id, "name": r.name} for r in rows]
+
+
+class BackScheduleCreate(BaseModel):
+    name: str = Field(min_length=1)
+    schedule: dict
+
+
+class BackSchedule(BaseModel):
+    id: int
+    name: str
+    schedule: dict
+
+
+@app.post("/api/back_schedules", response_model=BackSchedule)
+def add_back_schedule(s: BackScheduleCreate):
+    with engine.begin() as conn:
+        result = conn.execute(sa.insert(back_schedules).values(name=s.name, payload=s.schedule))
+        inserted_pk = result.inserted_primary_key
+        if inserted_pk and len(inserted_pk) > 0:
+            new_id = inserted_pk[0]
+        else:
+            new_id = conn.execute(sa.select(sa.func.max(back_schedules.c.id))).scalar_one()
+    return {"id": new_id, "name": s.name, "schedule": s.schedule}
+
+
+@app.get("/api/back_schedules", response_model=List[BackSchedule])
+def list_back_schedules():
+    with engine.begin() as conn:
+        rows = conn.execute(
+            sa.select(back_schedules.c.id, back_schedules.c.name, back_schedules.c.payload)
+            .order_by(back_schedules.c.id.desc())
+        ).all()
+    return [{"id": r.id, "name": r.name, "schedule": r.payload} for r in rows]
 
 
 @app.get("/api/healthz")

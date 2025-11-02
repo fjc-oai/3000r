@@ -34,8 +34,7 @@ export default function TimerView({ schedule, onBackToConfig }) {
       });
     }, 1000);
     return () => clearInterval(intervalRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [running, index, phases]);
+  }, [running, index, phases, remaining]);
 
   function playBeep() {
     if (!beep) return;
@@ -78,10 +77,13 @@ export default function TimerView({ schedule, onBackToConfig }) {
           <button onClick={onBackToConfig} style={{ padding: "0.5rem 0.75rem" }}>End Session</button>
           <strong>{schedule?.name || "Unnamed schedule"}</strong>
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <input type="checkbox" checked={beep} onChange={(e) => setBeep(e.target.checked)} />
-          Beep on phase change
-        </label>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button onClick={() => setRunning((v) => !v)} style={{ padding: "0.5rem 0.75rem" }}>{running ? "Pause" : "Resume"}</button>
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input type="checkbox" checked={beep} onChange={(e) => setBeep(e.target.checked)} />
+            Beep on phase change
+          </label>
+        </div>
       </div>
 
       <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
