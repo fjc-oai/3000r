@@ -7,7 +7,10 @@ export default function TimerView({ schedule, onBackToConfig }) {
   const [remaining, setRemaining] = useState(phases[0]?.durationSeconds || 0);
   const [running, setRunning] = useState(true);
   const [beep, setBeep] = useState(true);
+  const [voice, setVoice] = useState(true);
   const intervalRef = useRef(null);
+  const spokenCountdownRef = useRef(new Set());
+  const halfAnnouncedRef = useRef(false);
 
   const total = useMemo(() => totalSeconds(phases), [phases]);
   const elapsed = useMemo(() => {
@@ -18,6 +21,8 @@ export default function TimerView({ schedule, onBackToConfig }) {
 
   useEffect(() => {
     setRemaining(phases[index]?.durationSeconds || 0);
+    // New phase -> clear per-phase countdown spoken tracker
+    spokenCountdownRef.current.clear();
   }, [index, phases]);
 
   useEffect(() => {
@@ -35,6 +40,54 @@ export default function TimerView({ schedule, onBackToConfig }) {
     }, 1000);
     return () => clearInterval(intervalRef.current);
   }, [running, index, phases, remaining]);
+
+  function speak(text) {
+    if (!voice) return;
+    try {
+      const synth = window && window.speechSynthesis;
+      if (!synth) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1;
+      u.pitch = 1;
+      u.lang = "en-US";
+      synth.speak(u);
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // Announce start of each rep when a hold phase begins
+  useEffect(() => {
+    const cur = phases[index] || null;
+    if (!cur) return;
+    if (!running) return;
+    if (cur.type === "hold") {
+      speak("Start");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index]);
+
+  // Countdown 3-2-1 at the end of any phase (holds and breaks)
+  useEffect(() => {
+    if (!running) return;
+    const key = `${index}:${remaining}`;
+    if (remaining <= 3 && remaining >= 1) {
+      if (!spokenCountdownRef.current.has(key)) {
+        spokenCountdownRef.current.add(key);
+        speak(String(remaining));
+      }
+    }
+  }, [remaining, running, index]);
+
+  // Half-time announcement once per session
+  useEffect(() => {
+    if (!running) return;
+    if (halfAnnouncedRef.current) return;
+    if (total > 0 && elapsed >= total / 2) {
+      halfAnnouncedRef.current = true;
+      speak("Half time passed");
+    }
+  }, [elapsed, total, running]);
 
   function playBeep() {
     if (!beep) return;
@@ -70,15 +123,26 @@ export default function TimerView({ schedule, onBackToConfig }) {
   const next = phases[index + 1] || null;
   const progress = total > 0 ? Math.min(1, Math.max(0, elapsed / total)) : 0;
 
+  function handleEndSession() {
+    try {
+      if (window && window.speechSynthesis) window.speechSynthesis.cancel();
+    } catch (e) {}
+    onBackToConfig();
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <button onClick={onBackToConfig} style={{ padding: "0.5rem 0.75rem" }}>End Session</button>
+          <button onClick={handleEndSession} style={{ padding: "0.5rem 0.75rem" }}>End Session</button>
           <strong>{schedule?.name || "Unnamed schedule"}</strong>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <button onClick={() => setRunning((v) => !v)} style={{ padding: "0.5rem 0.75rem" }}>{running ? "Pause" : "Resume"}</button>
+          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input type="checkbox" checked={voice} onChange={(e) => setVoice(e.target.checked)} />
+            Voice prompts
+          </label>
           <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <input type="checkbox" checked={beep} onChange={(e) => setBeep(e.target.checked)} />
             Beep on phase change
