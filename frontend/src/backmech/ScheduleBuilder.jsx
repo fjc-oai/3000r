@@ -32,7 +32,8 @@ export default function ScheduleBuilder({ schedule, onChange, onSave }) {
     const breakBetweenRepsSeconds = Number(ex?.breakBetweenRepsSeconds) || Number(baseSet?.breakBetweenRepsSeconds) || 10;
     const breakBetweenSetsSeconds = Number(ex?.breakBetweenSetsSeconds) || 30;
     const setReps = ensureLen(ex?.setReps, setsCount, repsPerSet);
-    return { setsCount, repsPerSet, repHoldSeconds, breakBetweenRepsSeconds, breakBetweenSetsSeconds, setReps };
+    const setBreakSeconds = ensureLen(ex?.setBreakSeconds, Math.max(0, setsCount - 1), breakBetweenSetsSeconds);
+    return { setsCount, repsPerSet, repHoldSeconds, breakBetweenRepsSeconds, breakBetweenSetsSeconds, setReps, setBreakSeconds };
   }
 
   function addExercise() {
@@ -95,8 +96,23 @@ export default function ScheduleBuilder({ schedule, onChange, onSave }) {
                       type="number"
                       min={0}
                       value={Number(ex.breakBetweenSetsSeconds) || 0}
-                      onChange={(e) => updateExercise(exIdx, { breakBetweenSetsSeconds: Math.max(0, Number(e.target.value) || 0) }, { removeSets: true })}
+                      onChange={(e) => {
+                        const val = Math.max(0, Number(e.target.value) || 0);
+                        const u = deriveUniform(ex);
+                        const nextSetBreaks = Array(Math.max(0, u.setsCount - 1)).fill(val);
+                        updateExercise(exIdx, { breakBetweenSetsSeconds: val, setBreakSeconds: nextSetBreaks }, { removeSets: true });
+                      }}
                       style={{ width: 120, padding: 6 }}
+                    />
+                  </label>
+                  <label>
+                    <span style={{ marginRight: 6 }}>Break after exercise (s):</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={Number(ex.breakAfterExerciseSeconds) || 0}
+                      onChange={(e) => updateExercise(exIdx, { breakAfterExerciseSeconds: Math.max(0, Number(e.target.value) || 0) }, { removeSets: true })}
+                      style={{ width: 160, padding: 6 }}
                     />
                   </label>
                 </div>
@@ -110,7 +126,8 @@ export default function ScheduleBuilder({ schedule, onChange, onSave }) {
                       onChange={(e) => {
                         const nextCount = Math.max(0, Number(e.target.value) || 0);
                         const nextSetReps = ensureLen(ex?.setReps, nextCount, u.repsPerSet);
-                        updateExercise(exIdx, { setsCount: nextCount, setReps: nextSetReps }, { removeSets: true });
+                        const nextSetBreaks = ensureLen(ex?.setBreakSeconds, Math.max(0, nextCount - 1), u.breakBetweenSetsSeconds);
+                        updateExercise(exIdx, { setsCount: nextCount, setReps: nextSetReps, setBreakSeconds: nextSetBreaks }, { removeSets: true });
                       }}
                       style={{ width: 100, padding: 6 }} />
                   </label>
@@ -136,6 +153,30 @@ export default function ScheduleBuilder({ schedule, onChange, onSave }) {
                       onChange={(e) => updateExercise(exIdx, { breakBetweenRepsSeconds: Math.max(0, Number(e.target.value) || 0) }, { removeSets: true })}
                       style={{ width: 180, padding: 6 }} />
                   </label>
+                </div>
+              ); })()}
+              {(() => { const u = deriveUniform(ex); return (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>Break after set (s)</div>
+                  {u.setBreakSeconds.length === 0 ? (
+                    <div style={{ color: "#666", fontSize: 13 }}>No inter-set breaks (only one set defined).</div>
+                  ) : (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 8 }}>
+                      {u.setBreakSeconds.map((val, i) => (
+                        <label key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span>After set {i + 1}:</span>
+                          <input type="number" min={0} value={val}
+                            onChange={(e) => {
+                              const v = Math.max(0, Number(e.target.value) || 0);
+                              const arr = u.setBreakSeconds.slice();
+                              arr[i] = v;
+                              updateExercise(exIdx, { setBreakSeconds: arr }, { removeSets: true });
+                            }}
+                            style={{ width: 90, padding: 6 }} />
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ); })()}
               {(() => { const u = deriveUniform(ex); return (

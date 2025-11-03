@@ -22,7 +22,7 @@ export function formatDuration(seconds) {
 export function flattenSchedule(schedule) {
   const phases = [];
   if (!schedule || !Array.isArray(schedule.exercises)) return phases;
-  const bex = Number(schedule.breakBetweenExercisesSeconds) || 0;
+  const scheduleBex = Number(schedule.breakBetweenExercisesSeconds) || 0;
   schedule.exercises.forEach((ex, exIdx) => {
     const bsets = Math.max(0, Number(ex?.breakBetweenSetsSeconds) || 0);
     // Support two shapes:
@@ -72,12 +72,29 @@ export function flattenSchedule(schedule) {
           });
         }
       }
-      if (setIdx < setsData.length - 1 && isPositiveNumber(bsets)) {
-        phases.push({ type: "break", label: "Break between sets", durationSeconds: bsets, meta: { exerciseIndex: exIdx } });
+      if (setIdx < setsData.length - 1) {
+        let bset = bsets;
+        if (Array.isArray(ex?.setBreakSeconds) && ex.setBreakSeconds.length > 0) {
+          const v = Number(ex.setBreakSeconds[setIdx]);
+          if (isPositiveNumber(v) || v === 0) {
+            bset = Math.max(0, v || 0);
+          }
+        }
+        if (isPositiveNumber(bset)) {
+          phases.push({ type: "break", label: "Break between sets", durationSeconds: bset, meta: { exerciseIndex: exIdx } });
+        } else if (bset === 0) {
+          // explicit 0 is allowed: skip adding a break
+        } else if (isPositiveNumber(bsets)) {
+          phases.push({ type: "break", label: "Break between sets", durationSeconds: bsets, meta: { exerciseIndex: exIdx } });
+        }
       }
     });
-    if (exIdx < schedule.exercises.length - 1 && isPositiveNumber(bex)) {
-      phases.push({ type: "break", label: "Break between exercises", durationSeconds: bex, meta: {} });
+    if (exIdx < schedule.exercises.length - 1) {
+      const override = Number(ex?.breakAfterExerciseSeconds);
+      const bex = isPositiveNumber(override) ? override : scheduleBex;
+      if (isPositiveNumber(bex)) {
+        phases.push({ type: "break", label: "Break between exercises", durationSeconds: bex, meta: {} });
+      }
     }
   });
   return phases;

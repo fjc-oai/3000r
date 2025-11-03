@@ -56,9 +56,31 @@ export default function TimerView({ schedule, onBackToConfig }) {
     }
   }
 
+  function getExerciseByIndex(exIdx) {
+    return Array.isArray(schedule?.exercises) && exIdx >= 0 ? schedule.exercises[exIdx] : null;
+  }
+
+  function getSetTotalReps(exIdx, setIdx) {
+    const ex = getExerciseByIndex(exIdx);
+    if (!ex) return 0;
+    if (Array.isArray(ex.sets) && ex.sets[setIdx]) return Number(ex.sets[setIdx].reps) || 0;
+    if (Array.isArray(ex.setReps) && ex.setReps[setIdx] != null) return Number(ex.setReps[setIdx]) || 0;
+    if (Number.isFinite(ex.repsPerSet)) return Number(ex.repsPerSet) || 0;
+    return 0;
+  }
+
+  function getTotalSets(exIdx) {
+    const ex = getExerciseByIndex(exIdx);
+    if (!ex) return 0;
+    if (Array.isArray(ex.sets)) return ex.sets.length;
+    if (Array.isArray(ex.setReps)) return ex.setReps.length;
+    if (Number.isFinite(ex.setsCount)) return Number(ex.setsCount) || 0;
+    return 0;
+  }
+
   // Announce transitions
-  // - At start of a hold: exercise name (if new exercise) then "Start, rep N"
-  // - Immediately after a hold ends (break begins): "Rest"
+  // - At start of a hold: exercise name (if new exercise), sets left (if start of set), then "Start" and reps left
+  // - Immediately after a hold ends (break begins): "Rest" and (if last set of exercise) "<exercise> is done"
   useEffect(() => {
     const cur = phases[index] || null;
     if (!cur) return;
@@ -66,6 +88,14 @@ export default function TimerView({ schedule, onBackToConfig }) {
     const prev = index > 0 ? (phases[index - 1] || null) : null;
     if (cur.type === "break" && prev && prev.type === "hold") {
       speak("Rest");
+      // If next hold belongs to a different exercise (or none), announce exercise done
+      const nextHold = phases.slice(index + 1).find((p) => p && p.type === "hold");
+      const prevEx = prev?.meta?.exerciseIndex;
+      const nextEx = nextHold?.meta?.exerciseIndex;
+      if (typeof prevEx === "number" && (nextHold == null || nextEx !== prevEx)) {
+        const name = getExerciseByIndex(prevEx)?.name;
+        if (name) speak(`${name} is done`);
+      }
     }
     if (cur.type === "hold") {
       const curEx = typeof cur?.meta?.exerciseIndex === "number" ? cur.meta.exerciseIndex : undefined;
@@ -74,11 +104,20 @@ export default function TimerView({ schedule, onBackToConfig }) {
         const exName = schedule?.exercises?.[curEx]?.name;
         if (exName) speak(exName);
       }
-      const repNum = typeof cur?.meta?.repIndex === "number" ? (cur.meta.repIndex + 1) : undefined;
-      if (repNum !== undefined) {
-        speak(`Start, rep ${repNum}`);
-      } else {
-        speak("Start");
+      // Sets left (only at beginning of set)
+      const setIdx = typeof cur?.meta?.setIndex === "number" ? cur.meta.setIndex : undefined;
+      const repIdx = typeof cur?.meta?.repIndex === "number" ? cur.meta.repIndex : undefined;
+      if (curEx !== undefined && setIdx !== undefined && repIdx === 0) {
+        const totalSets = getTotalSets(curEx);
+        const setsLeft = Math.max(0, totalSets - setIdx);
+        if (setsLeft > 0) speak(`${setsLeft} ${setsLeft === 1 ? "set" : "sets"} left`);
+      }
+      // Start and reps left
+      speak("Start");
+      if (curEx !== undefined && setIdx !== undefined && repIdx !== undefined) {
+        const totalReps = getSetTotalReps(curEx, setIdx);
+        const repsLeft = Math.max(0, totalReps - repIdx);
+        if (repsLeft > 0) speak(`${repsLeft} ${repsLeft === 1 ? "rep" : "reps"} left`);
       }
     }
   }, [index, phases, running, schedule]);
@@ -132,6 +171,7 @@ export default function TimerView({ schedule, onBackToConfig }) {
     } else {
       setRunning(false);
       playBeep();
+      speak("Congrats, you finished all exercises");
     }
   }
 
