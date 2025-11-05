@@ -45,6 +45,7 @@ function App() {
   const [nowMs, setNowMs] = useState(Date.now());
   const [sessionWords, setSessionWords] = useState([]);
   const [quickDurMin, setQuickDurMin] = useState(30);
+  const [quickDate, setQuickDate] = useState(localYmd());
   const [reviewing, setReviewing] = useState(false);
 
   // word form
@@ -208,13 +209,13 @@ function App() {
 
   async function quickLogSession(e) {
     e.preventDefault();
-    const today = localYmd();
+    const chosen = (quickDate && /^\d{4}-\d{2}-\d{2}$/.test(quickDate)) ? quickDate : localYmd();
     try {
       const dur = Math.max(1, Number(quickDurMin));
       const res = await fetch(`${API}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: today, duration: dur }),
+        body: JSON.stringify({ date: chosen, duration: dur }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -431,6 +432,15 @@ function App() {
                   style={{ width: 100 }}
                 />
               </label>
+            <label>
+              Date:{" "}
+              <input
+                type="date"
+                value={quickDate}
+                onChange={(e) => setQuickDate(e.target.value)}
+                style={{ width: 150 }}
+              />
+            </label>
               <button type="submit">Log</button>
             </form>
             <form onSubmit={submitWord}>
