@@ -22,10 +22,15 @@ pip install -r requirements.txt
 
 # Features
 
+## 11/10
+- [ ] review words
+  - [ ] counters
+  - [ ] bi-directional
+
 ## 11/02
-- [ ] back mechnican 
-  - [ ] customized timer
-  - [ ] presets
+- [x] back mechnican 
+  - [x] customized timer
+  - [x] presets
   - [ ] bg music
 
 ## 10/25

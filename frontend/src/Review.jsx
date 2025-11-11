@@ -17,6 +17,7 @@ export default function Review({ onBack }) {
   const [reviewEndMs, setReviewEndMs] = useState(null);
   const [reviewEnded, setReviewEnded] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
+  const [reviewedCount, setReviewedCount] = useState(0);
 
   useEffect(() => {
     setReviewStartMs(Date.now());
@@ -110,6 +111,7 @@ export default function Review({ onBack }) {
         }
         setCurrentIndex(0);
         setExhausted(false);
+        setReviewedCount(0);
       }
     } catch (e) {
       console.error(e);
@@ -197,6 +199,8 @@ export default function Review({ onBack }) {
       // eslint-disable-next-line no-console
       console.error(e);
     } finally {
+      // count this review in the current session
+      setReviewedCount((c) => c + 1);
       nextWord();
     }
   }
@@ -272,6 +276,9 @@ export default function Review({ onBack }) {
           <button onClick={() => setSidebarOpen((v) => !v)} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>
             {sidebarOpen ? "Hide Panel" : "Show Panel"}
           </button>
+          <span style={{ fontSize: isMobile ? 18 : 20, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+            {reviewedCount}/{words.length}
+          </span>
         </div>
         {loading ? (
           <p>Loading...</p>
