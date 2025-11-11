@@ -18,8 +18,14 @@ export default function Review({ onBack }) {
   const [reviewEnded, setReviewEnded] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const [reviewedCount, setReviewedCount] = useState(0);
-  // Question prompt state: { type: "word" | "sentence", text: string }
+  // Question prompt state:
+  // - type: "word" | "sentence"
+  // - text: string (for "word" mode)
+  // - sentences: string[] (masked sentences for "sentence" mode)
   const [questionPrompt, setQuestionPrompt] = useState({ type: "word", text: "" });
+  // Dictionary definitions (for hint/explanation)
+  const [dictDefs, setDictDefs] = useState([]);
+  const [dictLoading, setDictLoading] = useState(false);
 
   useEffect(() => {
     setReviewStartMs(Date.now());
@@ -168,6 +174,36 @@ export default function Review({ onBack }) {
     return { text: masked, found: matched };
   }
 
+  function extractDefinitionsFromApi(data) {
+    try {
+      if (!Array.isArray(data)) return [];
+      const defs = [];
+      for (const entry of data) {
+        const meanings = Array.isArray(entry?.meanings) ? entry.meanings : [];
+        for (const meaning of meanings) {
+          const ds = Array.isArray(meaning?.definitions) ? meaning.definitions : [];
+          for (const d of ds) {
+            const defText = (d?.definition || "").trim();
+            if (defText) defs.push(defText);
+          }
+        }
+      }
+      // de-duplicate while preserving order
+      const seen = new Set();
+      const unique = [];
+      for (const d of defs) {
+        if (!seen.has(d)) {
+          seen.add(d);
+          unique.push(d);
+        }
+      }
+      // cap to avoid overly long hints
+      return unique.slice(0, 5);
+    } catch {
+      return [];
+    }
+  }
+
   function weightedOrder(n, weights) {
     const idxs = Array.from({ length: n }, (_, i) => i);
     const w = weights.slice();
@@ -213,6 +249,7 @@ export default function Review({ onBack }) {
   useEffect(() => {
     if (!currentWord) {
       setQuestionPrompt({ type: "word", text: "" });
+      setDictDefs([]);
       return;
     }
     // reset hint when switching to a new word
@@ -222,13 +259,44 @@ export default function Review({ onBack }) {
     const sentenceCandidates = examples.filter((ex) => isSentenceText(ex));
     const shouldUseSentence = sentenceCandidates.length > 0 && Math.random() < 0.5;
     if (shouldUseSentence) {
-      const pick = sentenceCandidates[Math.floor(Math.random() * sentenceCandidates.length)];
-      const masked = maskWordInSentence(pick, currentWord.word);
-      setQuestionPrompt({ type: "sentence", text: masked.text || pick });
+      const maskedAll = sentenceCandidates.map((s) => {
+        const { text } = maskWordInSentence(s, currentWord.word);
+        return text || s;
+      });
+      setQuestionPrompt({ type: "sentence", sentences: maskedAll });
     } else {
       setQuestionPrompt({ type: "word", text: currentWord.word });
     }
   }, [currentWord]);
+
+  // Fetch dictionary definitions (Free Dictionary API)
+  useEffect(() => {
+    const w = currentWord?.word;
+    if (!w) {
+      setDictDefs([]);
+      return;
+    }
+    let aborted = false;
+    async function load() {
+      try {
+        setDictLoading(true);
+        const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(w)}`);
+        if (!res.ok) {
+          setDictDefs([]);
+          return;
+        }
+        const data = await res.json();
+        if (aborted) return;
+        setDictDefs(extractDefinitionsFromApi(data));
+      } catch {
+        if (!aborted) setDictDefs([]);
+      } finally {
+        if (!aborted) setDictLoading(false);
+      }
+    }
+    load();
+    return () => { aborted = true; };
+  }, [currentWord?.word]);
 
   async function submitOutcome(outcome) {
     const w = currentWord;
@@ -339,19 +407,34 @@ export default function Review({ onBack }) {
           <p>No words available.</p>
         ) : (
           <div>
-            <div style={{ fontSize: questionPrompt.type === "sentence" ? (isMobile ? 22 : 28) : (isMobile ? 32 : 36), marginBottom: 16, textAlign: "center" }}>
+            <div style={{ fontSize: questionPrompt.type === "sentence" ? (isMobile ? 20 : 24) : (isMobile ? 32 : 36), marginBottom: 16, textAlign: "center" }}>
               {questionPrompt.type === "sentence" ? (
-                <span>{questionPrompt.text}</span>
+                <>
+                  <ul style={{ listStyle: "disc", textAlign: "left", display: "inline-block", paddingLeft: 18, margin: 0, lineHeight: 1.5 }}>
+                    {(questionPrompt.sentences || []).map((s, idx) => (
+                      <li key={idx} style={{ color: "#222" }}>{s}</li>
+                    ))}
+                  </ul>
+                  <div style={{ marginTop: 10, color: "#333", fontSize: isMobile ? 14 : 16 }}>
+                    <span style={{ fontWeight: 600 }}>Meaning:</span>{" "}
+                    {dictLoading ? "Loading…" : (dictDefs && dictDefs.length > 0 ? dictDefs[0] : "—")}
+                  </div>
+                </>
               ) : (
                 <strong>{currentWord.word}</strong>
               )}
             </div>
-            {showHint && currentWord.examples && currentWord.examples.length > 0 && (
-              <ul style={{ paddingLeft: 18, marginTop: 4, marginBottom: 16, lineHeight: 1.5 }}>
-                {currentWord.examples.map((ex, idx) => (
-                  <li key={idx} style={{ color: "#444" }}>{ex}</li>
-                ))}
-              </ul>
+            {showHint && (
+              <div style={{ marginBottom: 16 }}>
+                {currentWord.examples && currentWord.examples.length > 0 && (
+                  <ul style={{ paddingLeft: 18, marginTop: 4, marginBottom: 8, lineHeight: 1.5 }}>
+                    {currentWord.examples.map((ex, idx) => (
+                      <li key={idx} style={{ color: "#444" }}>{ex}</li>
+                    ))}
+                  </ul>
+                )}
+                {/* Definitions are shown above in sentence mode; no need to repeat in Hint */}
+              </div>
             )}
             <div style={{ display: "flex", gap: 12, justifyContent: isMobile ? "center" : "flex-start", flexWrap: "wrap" }}>
               <button onClick={() => setShowHint(true)} disabled={reviewEnded || exhausted} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>Hint</button>
