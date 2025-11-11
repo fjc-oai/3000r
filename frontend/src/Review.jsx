@@ -18,6 +18,8 @@ export default function Review({ onBack }) {
   const [reviewEnded, setReviewEnded] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const [reviewedCount, setReviewedCount] = useState(0);
+  // Question prompt state: { type: "word" | "sentence", text: string }
+  const [questionPrompt, setQuestionPrompt] = useState({ type: "word", text: "" });
 
   useEffect(() => {
     setReviewStartMs(Date.now());
@@ -140,6 +142,32 @@ export default function Review({ onBack }) {
     return denom > 0 ? yes / denom : 0;
   }
 
+  function countWords(s) {
+    if (!s || typeof s !== "string") return 0;
+    const parts = s.trim().split(/\s+/);
+    return parts.filter(Boolean).length;
+  }
+
+  function isSentenceText(s) {
+    return countWords(s) > 5;
+  }
+
+  function escapeRegExp(str) {
+    return (str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function maskWordInSentence(sentence, word) {
+    if (!sentence || !word) return { text: sentence || "", found: false };
+    const pattern = new RegExp(`\\b${escapeRegExp(word)}\\b`, "gi");
+    let matched = false;
+    const masked = sentence.replace(pattern, (m) => {
+      matched = true;
+      return "_".repeat(m.length);
+    });
+    // If not matched (e.g., example is an explanation), return original per requirement
+    return { text: masked, found: matched };
+  }
+
   function weightedOrder(n, weights) {
     const idxs = Array.from({ length: n }, (_, i) => i);
     const w = weights.slice();
@@ -180,6 +208,27 @@ export default function Review({ onBack }) {
     }
     setShowHint(false);
   }
+
+  // Decide prompt (word vs sentence) whenever the current word changes
+  useEffect(() => {
+    if (!currentWord) {
+      setQuestionPrompt({ type: "word", text: "" });
+      return;
+    }
+    // reset hint when switching to a new word
+    setShowHint(false);
+
+    const examples = Array.isArray(currentWord.examples) ? currentWord.examples : [];
+    const sentenceCandidates = examples.filter((ex) => isSentenceText(ex));
+    const shouldUseSentence = sentenceCandidates.length > 0 && Math.random() < 0.5;
+    if (shouldUseSentence) {
+      const pick = sentenceCandidates[Math.floor(Math.random() * sentenceCandidates.length)];
+      const masked = maskWordInSentence(pick, currentWord.word);
+      setQuestionPrompt({ type: "sentence", text: masked.text || pick });
+    } else {
+      setQuestionPrompt({ type: "word", text: currentWord.word });
+    }
+  }, [currentWord]);
 
   async function submitOutcome(outcome) {
     const w = currentWord;
@@ -290,8 +339,12 @@ export default function Review({ onBack }) {
           <p>No words available.</p>
         ) : (
           <div>
-            <div style={{ fontSize: isMobile ? 32 : 36, marginBottom: 16, textAlign: "center" }}>
-              <strong>{currentWord.word}</strong>
+            <div style={{ fontSize: questionPrompt.type === "sentence" ? (isMobile ? 22 : 28) : (isMobile ? 32 : 36), marginBottom: 16, textAlign: "center" }}>
+              {questionPrompt.type === "sentence" ? (
+                <span>{questionPrompt.text}</span>
+              ) : (
+                <strong>{currentWord.word}</strong>
+              )}
             </div>
             {showHint && currentWord.examples && currentWord.examples.length > 0 && (
               <ul style={{ paddingLeft: 18, marginTop: 4, marginBottom: 16, lineHeight: 1.5 }}>
