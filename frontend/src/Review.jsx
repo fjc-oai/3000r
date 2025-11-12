@@ -26,6 +26,10 @@ export default function Review({ onBack }) {
   // Dictionary definitions (for hint/explanation)
   const [dictDefs, setDictDefs] = useState([]);
   const [dictLoading, setDictLoading] = useState(false);
+  // Pause state
+  const [reviewPaused, setReviewPaused] = useState(false);
+  const [pauseStartedAt, setPauseStartedAt] = useState(null);
+  const [pausedAccumMs, setPausedAccumMs] = useState(0);
 
   useEffect(() => {
     setReviewStartMs(Date.now());
@@ -133,7 +137,9 @@ export default function Review({ onBack }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  const elapsedMs = reviewStartMs ? ((reviewEndMs ?? nowMs) - reviewStartMs) : 0;
+  const currentPausedMs = reviewPaused && pauseStartedAt ? Math.max(0, nowMs - pauseStartedAt) : 0;
+  const totalPausedMs = pausedAccumMs + currentPausedMs;
+  const elapsedMs = reviewStartMs ? Math.max(0, ((reviewEndMs ?? nowMs) - reviewStartMs - totalPausedMs)) : 0;
 
   const currentWord = useMemo(() => {
     if (!order || order.length === 0) return null;
@@ -162,9 +168,34 @@ export default function Review({ onBack }) {
     return (str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
+  function buildWordForms(word) {
+    if (!word || typeof word !== "string") return [];
+    const w = word.toLowerCase();
+    const forms = new Set([w]);
+    // Basic plural/3rd person
+    forms.add(w + "s");
+    forms.add(w + "es");
+    // Past and present participle
+    if (w.endsWith("y") && w.length > 1 && !/[aeiou]/i.test(w[w.length - 2])) {
+      // study -> studies, studied, studying
+      forms.add(w.slice(0, -1) + "ies");
+      forms.add(w.slice(0, -1) + "ied");
+      forms.add(w.slice(0, -1) + "ying");
+    } else if (w.endsWith("e")) {
+      // live -> lived, living
+      forms.add(w + "d");
+      forms.add(w.slice(0, -1) + "ing");
+    } else {
+      forms.add(w + "ed");
+      forms.add(w + "ing");
+    }
+    return Array.from(forms);
+  }
+
   function maskWordInSentence(sentence, word) {
     if (!sentence || !word) return { text: sentence || "", found: false };
-    const pattern = new RegExp(`\\b${escapeRegExp(word)}\\b`, "gi");
+    const forms = buildWordForms(word).map((f) => escapeRegExp(f));
+    const pattern = new RegExp(`\\b(?:${forms.join("|")})\\b`, "gi");
     let matched = false;
     const masked = sentence.replace(pattern, (m) => {
       matched = true;
@@ -245,6 +276,19 @@ export default function Review({ onBack }) {
     setShowHint(false);
   }
 
+  function togglePause() {
+    if (reviewEnded) return;
+    if (!reviewPaused) {
+      setReviewPaused(true);
+      setPauseStartedAt(Date.now());
+    } else {
+      const now = Date.now();
+      setReviewPaused(false);
+      setPausedAccumMs((ms) => ms + Math.max(0, now - (pauseStartedAt || now)));
+      setPauseStartedAt(null);
+    }
+  }
+
   // Decide prompt (word vs sentence) whenever the current word changes
   useEffect(() => {
     if (!currentWord) {
@@ -257,7 +301,8 @@ export default function Review({ onBack }) {
 
     const examples = Array.isArray(currentWord.examples) ? currentWord.examples : [];
     const sentenceCandidates = examples.filter((ex) => isSentenceText(ex));
-    const shouldUseSentence = sentenceCandidates.length > 0 && Math.random() < 0.5;
+    const isPhraseWord = countWords(currentWord.word) > 1;
+    const shouldUseSentence = !isPhraseWord && sentenceCandidates.length > 0 && Math.random() < 0.5;
     if (shouldUseSentence) {
       const maskedAll = sentenceCandidates.map((s) => {
         const { text } = maskWordInSentence(s, currentWord.word);
@@ -327,7 +372,9 @@ export default function Review({ onBack }) {
     setReviewEndMs(end);
     setReviewEnded(true);
     if (!reviewStartMs) return;
-    const elapsedMin = Math.max(1, Math.round((end - reviewStartMs) / 60000));
+    const pausedSoFar = pausedAccumMs + (reviewPaused && pauseStartedAt ? Math.max(0, end - pauseStartedAt) : 0);
+    const effectiveElapsedMs = Math.max(0, end - reviewStartMs - pausedSoFar);
+    const elapsedMin = Math.max(1, Math.round(effectiveElapsedMs / 60000));
     const today = localYmd();
     try {
       const res = await fetch(`${API}/review_sessions`, {
@@ -360,11 +407,13 @@ export default function Review({ onBack }) {
         {isMobile ? (
           <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", marginBottom: 6 }}>
             <button onClick={endReview} disabled={reviewEnded} style={primaryBtnStyle}>{reviewEnded ? "Session Ended" : "End Session"}</button>
+            <button onClick={togglePause} disabled={reviewEnded} style={secondaryBtnStyle}>{reviewPaused ? "Resume" : "Pause"}</button>
             <button onClick={onBack} style={secondaryBtnStyle}>Back</button>
           </div>
         ) : (
           <>
             <button onClick={endReview} disabled={reviewEnded} style={primaryBtnStyle}>{reviewEnded ? "Session Ended" : "End Session"}</button>
+            <button onClick={togglePause} disabled={reviewEnded} style={secondaryBtnStyle}>{reviewPaused ? "Resume" : "Pause"}</button>
             <button onClick={onBack} style={secondaryBtnStyle}>Back</button>
           </>
         )}
@@ -437,9 +486,9 @@ export default function Review({ onBack }) {
               </div>
             )}
             <div style={{ display: "flex", gap: 12, justifyContent: isMobile ? "center" : "flex-start", flexWrap: "wrap" }}>
-              <button onClick={() => setShowHint(true)} disabled={reviewEnded || exhausted} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>Hint</button>
-              <button onClick={() => submitOutcome("yes")} disabled={reviewEnded || exhausted} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>Yes</button>
-              <button onClick={() => submitOutcome("no")} disabled={reviewEnded || exhausted} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>No</button>
+              <button onClick={() => setShowHint(true)} disabled={reviewEnded || exhausted || reviewPaused} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>Hint</button>
+              <button onClick={() => submitOutcome("yes")} disabled={reviewEnded || exhausted || reviewPaused} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>Yes</button>
+              <button onClick={() => submitOutcome("no")} disabled={reviewEnded || exhausted || reviewPaused} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.5rem 1rem" }}>No</button>
             </div>
           </div>
         )}
